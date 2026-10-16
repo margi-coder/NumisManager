@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="350" viewBox="0 0 700 350">
+  <defs>
+    <linearGradient id="bgGrad_12_OBS" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#173324"/>
+      <stop offset="50%" stop-color="#24523a"/>
+      <stop offset="100%" stop-color="#173324"/>
+    </linearGradient>
+    <pattern id="guilloche_12_OBS" width="20" height="20" patternUnits="userSpaceOnUse">
+      <path d="M 0 10 Q 5 0 10 10 T 20 10" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="0.8"/>
+      <path d="M 10 0 Q 0 5 10 10 T 10 20" fill="none" stroke="rgba(212,175,55,0.06)" stroke-width="0.8"/>
+    </pattern>
+    <pattern id="dots_12_OBS" width="10" height="10" patternUnits="userSpaceOnUse">
+      <circle cx="5" cy="5" r="0.6" fill="rgba(255,255,255,0.08)"/>
+    </pattern>
+  </defs>
+
+  <!-- Background Base -->
+  <rect width="700" height="350" rx="10" fill="url(#bgGrad_12_OBS)"/>
+  <rect width="700" height="350" fill="url(#guilloche_12_OBS)"/>
+  <rect width="700" height="350" fill="url(#dots_12_OBS)"/>
+
+  <!-- Ornate Outer Border -->
+  <rect x="12" y="12" width="676" height="326" rx="8" fill="none" stroke="#2ecc71" stroke-width="2.5" opacity="0.85"/>
+  <rect x="18" y="18" width="664" height="314" rx="6" fill="none" stroke="rgba(255,255,255,0.25)" stroke-dasharray="6,4" stroke-width="1"/>
+
+  <!-- Corner Rosettes -->
+  <g fill="#2ecc71" opacity="0.9" font-family="'Georgia', serif" font-size="15" font-weight="bold" text-anchor="middle">
+    <circle cx="42" cy="40" r="18" fill="rgba(0,0,0,0.5)" stroke="#2ecc71" stroke-width="1.5"/>
+    <text x="42" y="45">25</text>
+    <circle cx="658" cy="40" r="18" fill="rgba(0,0,0,0.5)" stroke="#2ecc71" stroke-width="1.5"/>
+    <text x="658" y="45">25</text>
+    <circle cx="42" cy="310" r="18" fill="rgba(0,0,0,0.5)" stroke="#2ecc71" stroke-width="1.5"/>
+    <text x="42" y="315">25</text>
+    <circle cx="658" cy="310" r="18" fill="rgba(0,0,0,0.5)" stroke="#2ecc71" stroke-width="1.5"/>
+    <text x="658" y="315">25</text>
+  </g>
+
+  <!-- Header Text -->
+  <text x="350" y="46" fill="#f0ede6" font-family="'Georgia', serif" font-size="20" font-weight="bold" letter-spacing="4" text-anchor="middle">
+    BANK INDONESIA
+  </text>
+  <text x="350" y="66" fill="#2ecc71" font-family="'Courier New', monospace" font-size="12" letter-spacing="2" text-anchor="middle">
+    EMISI TAHUN 1959 • KOLEKSI NUMISMATIK INDONESIA
+  </text>
+
+  <!-- Center Artwork Box -->
+  <rect x="80" y="85" width="540" height="175" rx="6" fill="rgba(0,0,0,0.4)" stroke="#2ecc71" stroke-width="1.2" opacity="0.95"/>
+  <rect x="86" y="91" width="528" height="163" rx="4" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+
+  <!-- Giant Denomination Watermark -->
+  <text x="350" y="150" fill="rgba(255,255,255,0.08)" font-family="'Impact', 'Arial Black', sans-serif" font-size="64" font-weight="bold" text-anchor="middle">
+    25 RUPIAH
+  </text>
+
+  <!-- Title & Description -->
+  <text x="350" y="155" fill="#ffffff" font-family="'Georgia', serif" font-size="22" font-weight="bold" text-anchor="middle">
+    Bunga Teratai Air
+  </text>
+  <text x="350" y="185" fill="rgba(240,237,230,0.85)" font-family="'Arial', sans-serif" font-size="13" text-anchor="middle">
+    Keanggunan Flora Rawa Nusantara
+  </text>
+  <text x="350" y="225" fill="#2ecc71" font-family="'Georgia', serif" font-size="26" font-weight="bold" letter-spacing="1" text-anchor="middle">
+    25 Rupiah
+  </text>
+
+  <!-- Serial Number -->
+  <g font-family="'Courier New', monospace" font-size="13" font-weight="bold" fill="#ff4d4d">
+    <rect x="90" y="272" width="160" height="24" rx="4" fill="rgba(0,0,0,0.6)" stroke="rgba(255,77,77,0.4)" stroke-width="1"/>
+    <text x="170" y="288" text-anchor="middle">BNG-1959-25HX40112</text>
+
+    <rect x="450" y="272" width="160" height="24" rx="4" fill="rgba(0,0,0,0.6)" stroke="rgba(255,77,77,0.4)" stroke-width="1"/>
+    <text x="530" y="288" text-anchor="middle">BNG-1959-25HX40112</text>
+  </g>
+
+  <!-- Side Badge -->
+  <rect x="250" y="306" width="200" height="22" rx="11" fill="#2ecc71" opacity="0.95"/>
+  <text x="350" y="321" fill="#0a0c10" font-family="'Arial', sans-serif" font-size="11" font-weight="bold" letter-spacing="1" text-anchor="middle">
+    TAMPAK DEPAN • OBVERSE
+  </text>
+
+  <text x="350" y="296" fill="rgba(255,255,255,0.5)" font-family="'Arial', sans-serif" font-size="9" text-anchor="middle">
+    25 Rupiah Bunga • KONDISI AVF
+  </text>
+</svg>

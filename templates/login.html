@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Masuk - NumisManager</title>
+  <link rel="icon" type="image/png" href="/static/img/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #0a0c10;
+      --bg-surface: #12151c;
+      --bg-card: #1a1e28;
+      --bg-hover: #22273a;
+      --border: #2a2f42;
+      --border-gold: rgba(212, 175, 55, 0.25);
+      --gold-primary: #d4af37;
+      --gold-light: #f0c840;
+      --gold-dark: #9a7d0a;
+      --gold-glow: rgba(212, 175, 55, 0.15);
+      --text-primary: #f0ede6;
+      --text-secondary: #9a9590;
+      --text-muted: #5a5650;
+      --success: #4caf87;
+      --danger: #e05c5c;
+      --warning: #e8a838;
+      --info: #5b9cf0;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow-x: hidden;
+      padding: 20px;
+    }
+
+    /* Animated background elements */
+    .bg-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      background: 
+        radial-gradient(circle at 20% 15%, rgba(212, 175, 55, 0.08) 0%, transparent 45%),
+        radial-gradient(circle at 80% 85%, rgba(154, 125, 10, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 50% 50%, rgba(18, 21, 28, 0.7) 0%, var(--bg-base) 100%);
+    }
+
+    .coin-glow-orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      pointer-events: none;
+      opacity: 0.6;
+      animation: floatOrb 12s ease-in-out infinite alternate;
+    }
+
+    .orb-1 {
+      width: 320px;
+      height: 320px;
+      background: radial-gradient(circle, rgba(212, 175, 55, 0.2) 0%, transparent 70%);
+      top: 10%;
+      left: 15%;
+    }
+
+    .orb-2 {
+      width: 380px;
+      height: 380px;
+      background: radial-gradient(circle, rgba(240, 200, 64, 0.12) 0%, transparent 70%);
+      bottom: 10%;
+      right: 15%;
+      animation-delay: -6s;
+    }
+
+    @keyframes floatOrb {
+      0% { transform: translate(0, 0) scale(1); }
+      50% { transform: translate(30px, 40px) scale(1.08); }
+      100% { transform: translate(-25px, -20px) scale(0.95); }
+    }
+
+    /* Grid mesh overlay */
+    .grid-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image: 
+        linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+      background-size: 40px 40px;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* Login Card Container */
+    .login-container {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      max-width: 440px;
+    }
+
+    .login-card {
+      background: rgba(26, 30, 40, 0.75);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border-gold);
+      border-radius: 18px;
+      padding: 42px 36px;
+      box-shadow: 
+        0 24px 60px rgba(0, 0, 0, 0.6),
+        0 0 40px var(--gold-glow),
+        inset 0 1px 1px rgba(255, 255, 255, 0.1);
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .login-card:hover {
+      border-color: rgba(212, 175, 55, 0.45);
+      box-shadow: 
+        0 28px 70px rgba(0, 0, 0, 0.7),
+        0 0 55px rgba(212, 175, 55, 0.22),
+        inset 0 1px 1px rgba(255, 255, 255, 0.15);
+    }
+
+    /* Brand Header */
+    .brand-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .coin-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, rgba(212, 175, 55, 0.25), rgba(154, 125, 10, 0.1));
+      border: 1.5px solid var(--gold-primary);
+      box-shadow: 0 0 24px rgba(212, 175, 55, 0.35), inset 0 0 12px rgba(212, 175, 55, 0.2);
+      margin-bottom: 16px;
+      font-size: 30px;
+      animation: coinPulse 4s ease-in-out infinite;
+    }
+
+    @keyframes coinPulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(212, 175, 55, 0.3); }
+      50% { transform: scale(1.05); box-shadow: 0 0 32px rgba(212, 175, 55, 0.55); }
+    }
+
+    .brand-title {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #ffffff 30%, var(--gold-light) 75%, var(--gold-primary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 6px;
+    }
+
+    .brand-subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-weight: 400;
+      letter-spacing: 0.2px;
+    }
+
+    /* Form Styles */
+    .login-form {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .form-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .input-icon {
+      position: absolute;
+      left: 14px;
+      color: var(--text-muted);
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.2s ease;
+    }
+
+    .form-control {
+      width: 100%;
+      height: 48px;
+      background: rgba(18, 21, 28, 0.85);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0 44px 0 44px;
+      color: var(--text-primary);
+      font-size: 14px;
+      outline: none;
+      transition: all 0.25s ease;
+    }
+
+    .form-control::placeholder {
+      color: var(--text-muted);
+    }
+
+    .form-control:focus {
+      border-color: var(--gold-primary);
+      box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.18), 0 0 16px rgba(212, 175, 55, 0.12);
+      background: rgba(22, 26, 36, 0.95);
+    }
+
+    .form-control:focus + .input-icon,
+    .form-control:focus ~ .input-icon {
+      color: var(--gold-primary);
+    }
+
+    .input-wrapper:focus-within .input-icon {
+      color: var(--gold-primary);
+    }
+
+    .toggle-password {
+      position: absolute;
+      right: 12px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      transition: color 0.2s, background-color 0.2s;
+    }
+
+    .toggle-password:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    /* Error Alert */
+    .alert {
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.4;
+      display: none;
+      align-items: flex-start;
+      gap: 10px;
+      animation: alertSlide 0.3s ease-out;
+    }
+
+    @keyframes alertSlide {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .alert-danger {
+      background: rgba(224, 92, 92, 0.12);
+      border: 1px solid rgba(224, 92, 92, 0.35);
+      color: #ff9e9e;
+    }
+
+    .alert.show {
+      display: flex;
+    }
+
+    .alert-icon {
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    /* Submit Button */
+    .btn-submit {
+      width: 100%;
+      height: 50px;
+      margin-top: 10px;
+      border: none;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--gold-light) 0%, var(--gold-primary) 50%, var(--gold-dark) 100%);
+      color: #0a0c10;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 0.3px;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 4px 18px rgba(212, 175, 55, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .btn-submit::after {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: linear-gradient(60deg, transparent 40%, rgba(255, 255, 255, 0.3) 50%, transparent 60%);
+      transform: rotate(25deg) translateY(-100%);
+      transition: transform 0.6s ease;
+    }
+
+    .btn-submit:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(212, 175, 55, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.5);
+    }
+
+    .btn-submit:hover:not(:disabled)::after {
+      transform: rotate(25deg) translateY(100%);
+    }
+
+    .btn-submit:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .btn-submit:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Spinner */
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2.5px solid rgba(10, 12, 16, 0.25);
+      border-top-color: #0a0c10;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      display: none;
+    }
+
+    .btn-submit.loading .spinner {
+      display: inline-block;
+    }
+
+    .btn-submit.loading .btn-text {
+      display: none;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Footer info */
+    .login-footer {
+      margin-top: 28px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(42, 47, 66, 0.5);
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .login-footer p {
+      margin-bottom: 6px;
+    }
+
+    .login-footer .hint {
+      color: var(--text-secondary);
+      font-family: monospace;
+      font-size: 11px;
+      background: rgba(18, 21, 28, 0.6);
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-canvas"></div>
+  <div class="coin-glow-orb orb-1"></div>
+  <div class="coin-glow-orb orb-2"></div>
+  <div class="grid-overlay"></div>
+
+  <div class="login-container">
+    <div class="login-card">
+      <div class="brand-header">
+        <div style="display:inline-flex; align-items:center; justify-content:center; margin-bottom:16px;">
+          <img src="/static/img/logo.png" alt="NumisManager Logo" style="width:84px; height:84px; border-radius:20px; box-shadow:0 8px 30px rgba(0,0,0,0.6), 0 0 25px rgba(212,175,55,0.4); border:1.5px solid var(--border-gold); object-fit:cover;">
+        </div>
+        <h1 class="brand-title">NumisManager</h1>
+        <p class="brand-subtitle">Sistem Manajemen Inventaris & Koleksi Numismatik</p>
+      </div>
+
+      <div id="errorAlert" class="alert alert-danger" role="alert">
+        <span class="alert-icon">⚠</span>
+        <span id="errorMessage">Username atau kata sandi tidak valid.</span>
+      </div>
+
+      <form id="loginForm" class="login-form" autocomplete="off">
+        <div class="form-group">
+          <label for="usernameInput" class="form-label">Username</label>
+          <div class="input-wrapper">
+            <span class="input-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+            </span>
+            <input 
+              type="text" 
+              id="usernameInput" 
+              class="form-control" 
+              placeholder="Masukkan username" 
+              required
+              autofocus
+            >
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="passwordInput" class="form-label">Password</label>
+          <div class="input-wrapper">
+            <span class="input-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+            </span>
+            <input 
+              type="password" 
+              id="passwordInput" 
+              class="form-control" 
+              placeholder="Masukkan kata sandi" 
+              required
+            >
+            <button type="button" id="togglePasswordBtn" class="toggle-password" title="Lihat/Sembunyikan password" aria-label="Toggle password">
+              <svg id="eyeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="7" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" id="submitBtn" class="btn-submit">
+          <span class="btn-text">Masuk ke Sistem</span>
+          <div class="spinner"></div>
+        </button>
+      </form>
+
+      <div class="login-footer">
+        <p>Numismatic Asset & Inventory Suite</p>
+        <span class="hint">Hubungi administrator untuk akun baru</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Self-contained login handler
+    (function() {
+      // Check if already authenticated
+      const token = localStorage.getItem('numis_token');
+      if (token) {
+        window.location.href = '/app';
+        return;
+      }
+
+      const form = document.getElementById('loginForm');
+      const usernameInput = document.getElementById('usernameInput');
+      const passwordInput = document.getElementById('passwordInput');
+      const submitBtn = document.getElementById('submitBtn');
+      const errorAlert = document.getElementById('errorAlert');
+      const errorMessage = document.getElementById('errorMessage');
+      const togglePasswordBtn = document.getElementById('togglePasswordBtn');
+      const eyeIcon = document.getElementById('eyeIcon');
+
+      // Toggle password visibility
+      togglePasswordBtn.addEventListener('click', function() {
+        const isPassword = passwordInput.getAttribute('type') === 'password';
+        passwordInput.setAttribute('type', isPassword ? 'text' : 'password');
+        
+        if (isPassword) {
+          eyeIcon.innerHTML = `
+            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+            <line x1="1" y1="1" x2="23" y2="23"></line>
+          `;
+        } else {
+          eyeIcon.innerHTML = `
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="7" r="3"></circle>
+          `;
+        }
+      });
+
+      function showError(msg) {
+        errorMessage.textContent = msg || 'Gagal masuk. Periksa kembali username dan password.';
+        errorAlert.classList.add('show');
+      }
+
+      function hideError() {
+        errorAlert.classList.remove('show');
+      }
+
+      usernameInput.addEventListener('input', hideError);
+      passwordInput.addEventListener('input', hideError);
+
+      form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        hideError();
+
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value;
+
+        if (!username || !password) {
+          showError('Mohon isi username dan kata sandi.');
+          return;
+        }
+
+        // Loading state
+        submitBtn.classList.add('loading');
+        submitBtn.disabled = true;
+
+        try {
+          const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username, password })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.detail || 'Username atau kata sandi tidak valid.');
+          }
+
+          // Save auth info
+          localStorage.setItem('numis_token', data.access_token);
+          if (data.user) {
+            localStorage.setItem('numis_user', JSON.stringify(data.user));
+          } else {
+            // Fallback user object
+            localStorage.setItem('numis_user', JSON.stringify({
+              username: username,
+              role: 'user'
+            }));
+          }
+
+          // Redirect to main SPA
+          window.location.href = '/app';
+        } catch (err) {
+          showError(err.message);
+          submitBtn.classList.remove('loading');
+          submitBtn.disabled = false;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

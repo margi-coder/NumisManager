@@ -47,9 +47,18 @@ DashboardCollection/
 │   ├── auth_utils.py           # Enkripsi Bcrypt & JWT token validator
 │   ├── calculations.py         # Formula HPP (single/batch) & kalkulasi profit
 │   └── export_excel.py         # Styler & generator laporan spreadsheet Excel
+├── steering/                   # Tata Kelola & Dokumen Strategis (Governance)
+│   └── STEERING.md             # Single Source of Truth arsitektur & aturan domain
+├── dependencies/               # Manajemen Dependensi & Pustaka
+│   ├── requirements.txt        # Salinan manifest dependensi
+│   └── README.md               # Dokumentasi stack & manajemen dependensi
+├── tools/                      # Utilitas & Binary Pembantu Eksternal
+│   ├── bin/                    # Tempat penyimpanan binary (misal: cloudflared)
+│   └── README.md               # Dokumentasi utilitas binary multi-OS
 ├── static/                     # Aset Statis Web
 │   ├── css/                    # Stylesheet (style.css, components.css, album.css)
 │   ├── js/                     # Skrip SPA frontend (api.js, album.js, koleksi.js, dll.)
+│   ├── vendor/                 # Pustaka offline lokal (Chart.js UMD minified)
 │   ├── img/                    # Logo biner & aset visual
 │   └── uploads/                # Berkas gambar koleksi yang diunggah (OBV & REV)
 ├── templates/                  # Templat Tampilan HTML
@@ -59,39 +68,46 @@ DashboardCollection/
 │   ├── implementation_steps.md # 12 Tahapan implementasi dari awal hingga siap rilis
 │   ├── panduan_deploy.md       # Panduan deploy lokal, WiFi, Cloudflare Tunnel, VPS & PaaS
 │   └── report_line_of_code.md  # Laporan statistik & metrik baris kode (LOC)
+├── GEMINI.md                   # Aturan operasional untuk Antigravity / AI Agents
 ├── .gitignore                  # Konfigurasi pengecualian version control
 ├── main.py                     # Entry point server aplikasi FastAPI
-├── requirements.txt            # Daftar dependensi library Python
-├── run.bat                     # Skrip peluncur server lokal 1-klik (Port 8000)
-├── tunnel.bat                  # Skrip peluncur Cloudflare Tunnel 1-klik (Akses HP/Publik)
-├── cloudflared.exe             # Utilitas binary Cloudflare Tunnel
+├── requirements.txt            # Manifest utama dependensi library Python
+├── run.py                      # Smart Cross-Platform Runner & Environment Orchestrator
+├── run.bat                     # Peluncur 1-klik Windows (routes to run.py)
+├── tunnel.bat                  # Peluncur 1-klik Cloudflare Tunnel Windows
+├── run.sh                      # Peluncur 1-klik Linux & macOS
+├── tunnel.sh                   # Peluncur 1-klik Cloudflare Tunnel Linux & macOS
 └── README.md                   # Berkas panduan utama proyek
 ```
 
 ---
 
-## 🚀 Panduan Memulai Cepat (Quick Start)
+## 🚀 Panduan Memulai Cepat (Cross-Platform Smart Quick Start)
 
-### 1. Menjalankan Server Lokal di Windows (1-Klik)
-Cukup klik dua kali berkas **`run.bat`** di folder proyek. Server akan otomatis aktif pada port `8000`.
+NumisManager kini dilengkapi dengan **Smart Runner (`run.py`)** yang secara cerdas mendeteksi sistem operasi Anda, otomatis membuat & mengaktifkan `.venv`, menginstal seluruh dependensi jika belum ada, dan menyiapkan utilitas jaringan.
 
-### 2. Mengakses dari Ponsel / Perangkat Luar (1-Klik)
-Klik dua kali berkas **`tunnel.bat`**. Salin alamat HTTPS publik yang tampil untuk langsung menguji aplikasi dari ponsel atau laptop lain.
+### 1. Windows (1-Klik via Explorer atau Terminal)
+* **Jalankan Server Lokal**: Dobel-klik **`run.bat`** (atau ketik `python run.py`). Server otomatis aktif di port `8000`.
+* **Akses dari HP / Internet**: Dobel-klik **`tunnel.bat`** (atau ketik `python run.py --tunnel`). Salin tautan HTTPS publik yang muncul.
 
-### 3. Menjalankan Manual via Terminal / PowerShell
-```powershell
-# 1. Pindah ke direktori proyek
-cd g:\AntigravityWorkspace\DashboardCollection
+### 2. Linux & macOS (1-Klik via Terminal)
+```bash
+# Berikan hak eksekusi sekali saja
+chmod +x run.sh tunnel.sh run.py
 
-# 2. Buat & aktifkan virtual environment (opsional namun disarankan)
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+# Jalankan server lokal
+./run.sh
+# Atau akses internet/HP via tunnel
+./tunnel.sh
+```
 
-# 3. Instal dependensi
-pip install -r requirements.txt
-
-# 4. Jalankan aplikasi
-python main.py
+### 3. Opsi Perintah Lengkap (Smart CLI)
+```bash
+python run.py               # Menjalankan server lokal (default: port 8000)
+python run.py --tunnel      # Menjalankan server + Cloudflare Tunnel
+python run.py --port 8080   # Menjalankan pada port tertentu
+python run.py --check       # Memeriksa diagnostik & kesehatan lingkungan
+python run.py --install     # Hanya menginstal/memperbarui dependensi
 ```
 
 ### 4. Akses Aplikasi & Kredensial Bawaan

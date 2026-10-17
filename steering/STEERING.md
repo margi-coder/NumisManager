@@ -38,7 +38,7 @@ NumisManager dibangun khusus untuk komunitas kolektor dan pedagang numismatik (u
 
 ### C. Jaringan & Aksesibilitas
 * **Lokal**: Port default `8000` via `run.bat` (`python main.py`).
-* **Remote / Mobile Testing**: Cloudflare Quick Tunnel via `tunnel.bat` (`cloudflared.exe tunnel --url http://localhost:8000`).
+* **Remote / Mobile Testing**: Cloudflare Quick Tunnel via `tunnel.bat` atau `run.py --tunnel` (`tools/bin/cloudflared.exe tunnel --url http://localhost:8000`).
 
 ---
 
@@ -93,7 +93,7 @@ NumisManager dibangun khusus untuk komunitas kolektor dan pedagang numismatik (u
 * ⛔ **Dilarang Keras Mengunggah (*Do Not Commit*)**:
   * Direktori virtual environment: `.venv/`
   * Direktori cache Python: `__pycache__/`, `*.pyc`
-  * Binary Cloudflare executable: `cloudflared.exe` (55 MB+)
+  * Binary Cloudflare executable: `tools/bin/cloudflared.exe` (55 MB+) atau binary di `tools/bin/`
   * Berkas database lokal jika mengandung informasi rahasia / credential privat.
 * 🛡️ **Integritas Dokumentasi**:
   * Jangan menghapus atau mengubah dokumentasi historis di folder `docs/` tanpa alasan spesifik.

@@ -1,6 +1,6 @@
 # NumisManager - Antigravity Agent Guidelines & Operational Rules
 
-Dokumen ini dibaca secara otomatis oleh Antigravity dan agen AI lainnya sebagai **panduan operasional langsung** saat bekerja di repositori ini. Untuk tata kelola strategis lengkap, rujuk [STEERING.md](file:///g:/AntigravityWorkspace/DashboardCollection/STEERING.md).
+Dokumen ini dibaca secara otomatis oleh Antigravity dan agen AI lainnya sebagai **panduan operasional langsung** saat bekerja di repositori ini. Untuk tata kelola strategis lengkap, rujuk [steering/STEERING.md](file:///g:/AntigravityWorkspace/DashboardCollection/steering/STEERING.md).
 
 ---
 
@@ -19,7 +19,7 @@ Dokumen ini dibaca secara otomatis oleh Antigravity dan agen AI lainnya sebagai 
    * **Tooltip Cerdas**: Baris teratas tabel koleksi/stok wajib menggunakan kelas `tooltip-down` agar pratinjau foto tidak terpotong oleh batas layar atas.
    * **Modal Detail**: Harus berorientasi melebar (*ultra-wide*) 2 kolom tanpa scroll berlebih.
 4. **Keamanan & Version Control**:
-   * Jangan pernah meng-stage atau meng-commit file biner besar `cloudflared.exe` (55 MB+) atau folder `.venv/` / `__pycache__/`.
+   * Jangan pernah meng-stage atau meng-commit file biner besar `tools/bin/` (misal: `cloudflared.exe` 55 MB+) atau folder `.venv/` / `__pycache__/`.
    * Jaga repository git lokal tetap tersinkronisasi bersih dengan remote `https://github.com/margi-coder/NumisManager.git`.
 5. **Format Data**:
    * Mata uang: Gunakan `formatRupiah(value)` untuk tampilan IDR.

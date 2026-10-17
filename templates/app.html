@@ -16,8 +16,13 @@
   <link rel="stylesheet" href="/static/css/components.css?v=14">
   <link rel="stylesheet" href="/static/css/album.css?v=14">
 
-  <!-- Chart.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Chart.js (Local Vendor with CDN Fallback) -->
+  <script src="/static/vendor/chartjs/chart.umd.min.js"></script>
+  <script>
+    if (typeof Chart === 'undefined') {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>');
+    }
+  </script>
 </head>
 <body>
   <!-- Mobile Sidebar Backdrop -->

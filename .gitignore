@@ -16,8 +16,12 @@ env/
 *.db-wal
 *.db-shm
 
-# Large binary developer utilities
+# Large binary developer utilities & tools
 cloudflared.exe
+tools/bin/*
+!tools/bin/.gitkeep
+tools/*.exe
+tools/cloudflared*
 
 # IDE & Editor files
 .vscode/

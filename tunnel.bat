@@ -1,18 +1,22 @@
 @echo off
-title NumisManager - Cloudflare Tunnel (Remote / Mobile Access)
-echo.
-echo  ======================================================
-echo    NumisManager - Cloudflare Tunnel Launcher
-echo  ======================================================
-echo.
-echo  Membuka akses internet publik ke server lokal (port 8000)...
-echo  Pastikan server NumisManager (run.bat) sudah berjalan terlebih dahulu.
-echo.
-echo  Tekan CTRL+C untuk menutup akses tunnel.
-echo.
-if exist ".\cloudflared.exe" (
-    .\cloudflared.exe tunnel --url http://localhost:8000
-) else (
-    echo [ERROR] Berkas cloudflared.exe tidak ditemukan di folder ini.
-    pause
+setlocal
+title NumisManager - Cloudflare Tunnel Launcher
+cd /d "%~dp0"
+
+where python >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    python run.py --tunnel %*
+    goto :end
 )
+
+where py >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    py run.py --tunnel %*
+    goto :end
+)
+
+echo [ERROR] Python tidak ditemukan di sistem Anda!
+pause
+
+:end
+endlocal

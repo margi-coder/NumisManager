@@ -397,6 +397,46 @@ function printHolderLabel(id) {
 
 
 /**
+ * Helper label display untuk kategori galeri foto
+ */
+function getGalleryLabelDisplay(label) {
+  const map = {
+    'watermark': '💧 Tanda Air (Watermark)',
+    'slab': '🏛️ Slab / Segel Grading',
+    'benang_pengaman': '🧵 Benang Pengaman',
+    'detail': '🔍 Detail Fitur Cetak',
+    'cacat_variasi': '⚠️ Cacat / Variasi Error',
+    'sertifikat': '📄 Sertifikat / Faktur',
+    'lainnya': '📸 Detail Tambahan'
+  };
+  return map[label] || `📸 ${(label || 'Detail').toUpperCase()}`;
+}
+
+/**
+ * Pengalih tab di modal Rincian Lengkap Item (Rincian vs Galeri Multi-Foto)
+ */
+function switchDetailTab(tabName) {
+  const tabInfo = document.getElementById('detailTabContentInfo');
+  const tabGallery = document.getElementById('detailTabContentGallery');
+  const btnInfo = document.getElementById('detailTabBtnInfo');
+  const btnGallery = document.getElementById('detailTabBtnGallery');
+
+  if (tabInfo && tabGallery && btnInfo && btnGallery) {
+    if (tabName === 'info') {
+      tabInfo.style.display = 'block';
+      tabGallery.style.display = 'none';
+      btnInfo.className = 'btn btn-sm btn-primary';
+      btnGallery.className = 'btn btn-sm btn-secondary';
+    } else {
+      tabInfo.style.display = 'none';
+      tabGallery.style.display = 'block';
+      btnInfo.className = 'btn btn-sm btn-secondary';
+      btnGallery.className = 'btn btn-sm btn-primary';
+    }
+  }
+}
+
+/**
  * Modal View Detail Item Koleksi
  */
 async function showViewItemModal(id) {
@@ -412,169 +452,195 @@ async function showViewItemModal(id) {
     const safeTitleObv = escapeHtml((item.nama_item || 'Koleksi') + ' - Obverse');
     const safeTitleRev = escapeHtml((item.nama_item || 'Koleksi') + ' - Reverse');
 
+    const galleryList = Array.isArray(item.gallery_fotos) ? item.gallery_fotos : [];
+    const galleryCount = galleryList.length;
+
     const body = `
-      <div style="display:flex; flex-direction:column; gap:18px;">
-        <!-- Header Info & Photos -->
-        <div style="display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap;">
-          
-          <!-- Dual Photos (OBV & REV) -->
-          <div style="display:flex; gap:14px; flex-shrink:0;">
-            <!-- Obverse Card -->
-            <div style="width:180px; text-align:center;">
-              <div style="width:180px; height:105px; border-radius:10px; background:#0a0c10; border:1px solid var(--border-gold); overflow:hidden; display:flex; align-items:center; justify-content:center; padding:4px; box-shadow: inset 0 0 14px rgba(0,0,0,0.8);">
-                ${fotoObv ? `
-                  <img src="${escapeHtml(fotoObv)}" style="max-width:100%; max-height:100%; object-fit:contain; cursor:zoom-in; border-radius:4px;" onclick="openGlobalLightbox('${escapeHtml(fotoObv)}', '${safeTitleObv}')" title="Tampak Depan (Klik untuk memperbesar)" onerror="this.onerror=null; this.src='/static/img/logo.png';">
-                ` : `
-                  <div style="text-align:center; color:var(--text-muted); font-size:11px;">
-                    <div style="font-size:26px; margin-bottom:2px;">🪙</div>
-                    Tanpa OBV
+      <div>
+        <!-- TAB 1: Rincian & Spesifikasi -->
+        <div id="detailTabContentInfo" style="display:block;">
+          <div style="display:flex; flex-direction:column; gap:16px;">
+            
+            <!-- Photos Row (OBV, REV, dan foto tambahan ditaruh di sebelah kanannya) -->
+            <!-- Jika tidak ada foto tambahan selain OBV & REV, area kanan dibiarkan kosong tanpa kotak kosong -->
+            <div style="display:flex; gap:14px; align-items:flex-start; overflow-x:auto; padding-bottom:6px; max-width:100%;">
+              <!-- Obverse Card -->
+              <div style="width:180px; text-align:center; flex-shrink:0;">
+                <div style="width:180px; height:105px; border-radius:10px; background:#0a0c10; border:1px solid var(--border-gold); overflow:hidden; display:flex; align-items:center; justify-content:center; padding:4px; box-shadow: inset 0 0 14px rgba(0,0,0,0.8);">
+                  ${fotoObv ? `
+                    <img src="${escapeHtml(fotoObv)}" style="max-width:100%; max-height:100%; object-fit:contain; cursor:zoom-in; border-radius:4px;" onclick="openGlobalLightbox('${escapeHtml(fotoObv)}', '${safeTitleObv}')" title="Tampak Depan (Klik untuk memperbesar)" onerror="this.onerror=null; this.src='/static/img/logo.png';">
+                  ` : `
+                    <div style="text-align:center; color:var(--text-muted); font-size:11px;">
+                      <div style="font-size:26px; margin-bottom:2px;">🪙</div>
+                      Tanpa OBV
+                    </div>
+                  `}
+                </div>
+                <div style="font-size:11px; color:var(--gold-light); font-weight:700; margin-top:6px;">📸 OBV (Tampak Depan)</div>
+              </div>
+
+              <!-- Reverse Card -->
+              <div style="width:180px; text-align:center; flex-shrink:0;">
+                <div style="width:180px; height:105px; border-radius:10px; background:#0a0c10; border:1px solid var(--border-gold); overflow:hidden; display:flex; align-items:center; justify-content:center; padding:4px; box-shadow: inset 0 0 14px rgba(0,0,0,0.8);">
+                  ${fotoRev ? `
+                    <img src="${escapeHtml(fotoRev)}" style="max-width:100%; max-height:100%; object-fit:contain; cursor:zoom-in; border-radius:4px;" onclick="openGlobalLightbox('${escapeHtml(fotoRev)}', '${safeTitleRev}')" title="Tampak Belakang (Klik untuk memperbesar)" onerror="this.onerror=null; this.src='/static/img/logo.png';">
+                  ` : `
+                    <div style="text-align:center; color:var(--text-muted); font-size:11px;">
+                      <div style="font-size:26px; margin-bottom:2px;">🪙</div>
+                      Tanpa REV
+                    </div>
+                  `}
+                </div>
+                <div style="font-size:11px; color:var(--gold-light); font-weight:700; margin-top:6px;">📸 REV (Tampak Belakang)</div>
+              </div>
+
+              <!-- Foto Selain OBV & REV (Ditaruh berdampingan di baris yang sama) -->
+              ${galleryList.map(gf => {
+                const labelText = getGalleryLabelDisplay(gf.label);
+                return `
+                  <div style="width:180px; text-align:center; flex-shrink:0;">
+                    <div style="width:180px; height:105px; border-radius:10px; background:#0a0c10; border:1px solid var(--border-gold); overflow:hidden; display:flex; align-items:center; justify-content:center; padding:4px; box-shadow: inset 0 0 14px rgba(0,0,0,0.8);">
+                      <img src="${escapeHtml(gf.foto_path)}" style="max-width:100%; max-height:100%; object-fit:contain; cursor:zoom-in; border-radius:4px;" onclick="openGlobalLightbox('${escapeHtml(gf.foto_path)}', '${escapeHtml(item.nama_item + ' - ' + labelText)}')" title="Klik untuk memperbesar (Lightbox)" onerror="this.onerror=null; this.src='/static/img/logo.png';">
+                    </div>
+                    <div style="font-size:11px; color:var(--gold-light); font-weight:700; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(gf.catatan || labelText)}">
+                      ${escapeHtml(labelText)}
+                    </div>
                   </div>
-                `}
-              </div>
-              <div style="font-size:11px; color:var(--gold-light); font-weight:700; margin-top:6px;">📸 OBV (Tampak Depan)</div>
+                `;
+              }).join('')}
             </div>
 
-            <!-- Reverse Card -->
-            <div style="width:180px; text-align:center;">
-              <div style="width:180px; height:105px; border-radius:10px; background:#0a0c10; border:1px solid var(--border-gold); overflow:hidden; display:flex; align-items:center; justify-content:center; padding:4px; box-shadow: inset 0 0 14px rgba(0,0,0,0.8);">
-                ${fotoRev ? `
-                  <img src="${escapeHtml(fotoRev)}" style="max-width:100%; max-height:100%; object-fit:contain; cursor:zoom-in; border-radius:4px;" onclick="openGlobalLightbox('${escapeHtml(fotoRev)}', '${safeTitleRev}')" title="Tampak Belakang (Klik untuk memperbesar)" onerror="this.onerror=null; this.src='/static/img/logo.png';">
+            <!-- Metadata Header -->
+            <div style="background:rgba(255,255,255,0.015); border:1px solid var(--border); border-radius:10px; padding:14px;">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+                <span style="font-size:22px;">${jenisIco}</span>
+                <h3 style="margin:0; font-size:18px; color:var(--text-primary); font-weight:700;">${escapeHtml(item.nama_item)}</h3>
+              </div>
+
+              <!-- Badges Bar -->
+              <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:center;">
+                <span class="badge" style="background:rgba(212,175,55,0.15); color:var(--gold-light); border:1px solid var(--border-gold); font-size:11.5px; font-family:monospace;">
+                  Kode: ${escapeHtml(item.kode_item || ('ITM-' + item.id))}
+                </span>
+                ${item.batch_kode ? `
+                  <span class="badge" style="background:rgba(91,156,240,0.15); color:var(--info); border:1px solid rgba(91,156,240,0.3); font-size:11.5px; font-family:monospace;">
+                    Batch: ${escapeHtml(item.batch_kode)} ${item.batch_nama ? `(${escapeHtml(item.batch_nama)})` : ''}
+                  </span>
                 ` : `
-                  <div style="text-align:center; color:var(--text-muted); font-size:11px;">
-                    <div style="font-size:26px; margin-bottom:2px;">🪙</div>
-                    Tanpa REV
-                  </div>
+                  <span class="badge" style="background:rgba(255,255,255,0.05); color:var(--text-muted); font-size:11px;">
+                    Single (Non-Batch)
+                  </span>
                 `}
+                ${formatGrade(item.grade)}
+                ${formatJenis(item.jenis)}
+                ${formatStatusKoleksi(item.status_koleksi)}
+                ${formatStatus(item.status)}
               </div>
-              <div style="font-size:11px; color:var(--gold-light); font-weight:700; margin-top:6px;">📸 REV (Tampak Belakang)</div>
-            </div>
-          </div>
 
-          <!-- Metadata Header -->
-          <div style="flex-grow:1; min-width:240px;">
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
-              <span style="font-size:22px;">${jenisIco}</span>
-              <h3 style="margin:0; font-size:18px; color:var(--text-primary); font-weight:700;">${escapeHtml(item.nama_item)}</h3>
-            </div>
-
-            <!-- Badges Bar: Kode Item & Kode Batch -->
-            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:center;">
-              <span class="badge" style="background:rgba(212,175,55,0.15); color:var(--gold-light); border:1px solid var(--border-gold); font-size:11.5px; font-family:monospace;">
-                Kode: ${escapeHtml(item.kode_item || ('ITM-' + item.id))}
-              </span>
-              ${item.batch_kode ? `
-                <span class="badge" style="background:rgba(91,156,240,0.15); color:var(--info); border:1px solid rgba(91,156,240,0.3); font-size:11.5px; font-family:monospace;">
-                  Batch: ${escapeHtml(item.batch_kode)} ${item.batch_nama ? `(${escapeHtml(item.batch_nama)})` : ''}
-                </span>
-              ` : `
-                <span class="badge" style="background:rgba(255,255,255,0.05); color:var(--text-muted); font-size:11px;">
-                  Single (Non-Batch)
-                </span>
-              `}
-              ${formatGrade(item.grade)}
-              ${formatJenis(item.jenis)}
-              ${formatStatusKoleksi(item.status_koleksi)}
-              ${formatStatus(item.status)}
+              ${item.nomor_seri ? `<div style="font-size:13.5px; color:var(--gold-light); margin-bottom:6px;"><strong>Nomor Seri:</strong> <code>${escapeHtml(item.nomor_seri)}</code></div>` : ''}
+              ${item.lembaga_grading && item.lembaga_grading !== '-' ? `
+                <div style="margin: 6px 0; display: inline-flex; align-items: center; gap: 8px; background: rgba(212, 175, 55, 0.1); border: 1px solid var(--border-gold); padding: 5px 10px; border-radius: 6px;">
+                  <span style="font-size: 14px;">🏛️</span>
+                  <span style="font-size: 12.5px; font-weight: 800; color: var(--gold-light);">
+                    ${escapeHtml(item.lembaga_grading)} ${escapeHtml(item.grade_numerik || item.grade || '')}
+                  </span>
+                  ${item.nomor_sertifikasi ? `<span style="font-size: 11px; color: var(--text-secondary); font-family: monospace;">#${escapeHtml(item.nomor_sertifikasi)}</span>` : ''}
+                  ${item.grading_url ? `<a href="${escapeHtml(item.grading_url)}" target="_blank" rel="noopener noreferrer" style="font-size: 11px; color: var(--info); text-decoration: underline; margin-left: 4px;">Verifikasi ↗</a>` : ''}
+                </div>
+              ` : ''}
+              ${(item.detail || item.sertifikasi) ? `<div style="font-size:12px; color:var(--text-secondary); margin-bottom:4px;"><strong>Detail / Sertifikasi:</strong> ${escapeHtml(item.detail || item.sertifikasi)}</div>` : ''}
+              ${item.catatan_internal || item.catatan ? `<div style="font-size:12px; color:var(--text-muted); font-style:italic; margin-top:4px;">"${escapeHtml(item.catatan_internal || item.catatan)}"</div>` : ''}
             </div>
 
-            ${item.nomor_seri ? `<div style="font-size:13.5px; color:var(--gold-light); margin-bottom:6px;"><strong>Nomor Seri:</strong> <code>${escapeHtml(item.nomor_seri)}</code></div>` : ''}
-            ${item.lembaga_grading && item.lembaga_grading !== '-' ? `
-              <div style="margin: 8px 0; display: inline-flex; align-items: center; gap: 8px; background: rgba(212, 175, 55, 0.1); border: 1px solid var(--border-gold); padding: 5px 10px; border-radius: 6px;">
-                <span style="font-size: 14px;">🏛️</span>
-                <span style="font-size: 12.5px; font-weight: 800; color: var(--gold-light);">
-                  ${escapeHtml(item.lembaga_grading)} ${escapeHtml(item.grade_numerik || item.grade || '')}
-                </span>
-                ${item.nomor_sertifikasi ? `<span style="font-size: 11px; color: var(--text-secondary); font-family: monospace;">#${escapeHtml(item.nomor_sertifikasi)}</span>` : ''}
-                ${item.grading_url ? `<a href="${escapeHtml(item.grading_url)}" target="_blank" rel="noopener noreferrer" style="font-size: 11px; color: var(--info); text-decoration: underline; margin-left: 4px;">Verifikasi ↗</a>` : ''}
+            <!-- Specifications & Stock Grid -->
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap:12px; background:rgba(255,255,255,0.02); padding:16px; border-radius:10px; border:1px solid var(--border);">
+              <div>
+                <div style="font-size:11px; color:var(--text-muted);">Kode Item</div>
+                <div style="font-weight:700; color:var(--gold-light); font-size:13px; font-family:monospace;">${escapeHtml(item.kode_item || '-')}</div>
               </div>
-            ` : ''}
-            ${(item.detail || item.sertifikasi) ? `<div style="font-size:12px; color:var(--text-secondary); margin-bottom:4px;"><strong>Detail / Sertifikasi:</strong> ${escapeHtml(item.detail || item.sertifikasi)}</div>` : ''}
-            ${item.catatan_internal || item.catatan ? `<div style="font-size:12px; color:var(--text-muted); font-style:italic; margin-top:4px;">"${escapeHtml(item.catatan_internal || item.catatan)}"</div>` : ''}
+              <div>
+                <div style="font-size:11px; color:var(--text-muted);">Batch Pembelian</div>
+                <div style="font-weight:600; color:var(--text-primary); font-size:13px;">${escapeHtml(item.batch_kode || 'Pembelian Single')}</div>
+              </div>
+              <div>
+                <div style="font-size:11px; color:var(--text-muted);">Negara &amp; Tahun</div>
+                <div style="font-weight:600; color:var(--text-primary); font-size:13px;">${escapeHtml(item.negara || 'Indonesia')} ${item.tahun ? `(${escapeHtml(item.tahun)})` : ''}</div>
+              </div>
+              <div>
+                <div style="font-size:11px; color:var(--text-muted);">Denominasi / Nominal</div>
+                <div style="font-weight:600; color:var(--text-primary); font-size:13px;">${escapeHtml(item.denominasi || item.nominal || '-')}</div>
+              </div>
+              <div>
+                <div style="font-size:11px; color:var(--text-muted);">Sisa Stok / Total</div>
+                <div style="font-weight:700; font-size:13.5px; color:${isHabis ? 'var(--danger)' : 'var(--success)'};">${qtyTersisa} / ${item.qty} pcs ${isHabis ? '(HABIS)' : ''}</div>
+              </div>
+              <div>
+                <div style="font-size:11px; color:var(--text-muted);">Qty Terjual</div>
+                <div style="font-weight:600; font-size:13px; color:var(--text-primary);">${item.qty_terjual || 0} pcs</div>
+              </div>
+              <div>
+                <div style="font-size:11px; color:var(--text-muted);">HPP Modal per Pcs</div>
+                <div style="font-weight:700; color:var(--gold-light); font-size:13.5px;">${formatRupiah(item.hpp_per_pcs)}</div>
+              </div>
+              <div>
+                <div style="font-size:11px; color:var(--text-muted);">Harga Beli Total / Ongkir</div>
+                <div style="font-weight:600; color:var(--text-secondary); font-size:12.5px;">${formatRupiah(item.harga)} / ${formatRupiah(item.ongkir)}</div>
+              </div>
+              <div>
+                <div style="font-size:11px; color:var(--text-muted);">Harga Jual Target</div>
+                <div style="font-weight:700; color:var(--success); font-size:13.5px;">${formatRupiah(item.harga_jual || 0)}</div>
+              </div>
+              <div>
+                <div style="font-size:11px; color:var(--text-muted);">Supplier &amp; Tanggal Beli</div>
+                <div style="font-weight:600; color:var(--text-primary); font-size:12.5px;">${escapeHtml(item.supplier_nama || item.perolehan || '-')} ${item.tanggal_beli ? `• ${formatDate(item.tanggal_beli)}` : ''}</div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Multi-Photo Gallery Preview Strip -->
-        <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 14px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <div style="font-size: 11.5px; font-weight: 700; color: var(--gold-light); text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px;">
-              <span>📸 Galeri Multi-Foto (Watermark, Slab, &amp; Detail)</span>
-              <span class="badge" style="background: rgba(212,175,55,0.15); color: var(--gold-light); font-size: 10.5px; padding: 2px 7px;">
-                ${(item.gallery_fotos || []).length} Foto
-              </span>
+        <!-- TAB 2: Galeri Multi-Foto (Watermark, Slab, & Detail) -->
+        <div id="detailTabContentGallery" style="display:none;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; background:rgba(212,175,55,0.06); border:1px solid var(--border-gold); padding:12px 16px; border-radius:8px;">
+            <div>
+              <div style="font-weight:700; color:var(--gold-light); font-size:14px;">
+                📸 Galeri Dokumentasi Multi-Foto
+              </div>
+              <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
+                Dokumentasi foto tanda air (watermark), segel grading slab, benang pengaman, dan variasi fisik
+              </div>
             </div>
-            <button class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 10px;" onclick="closeModal(); showUploadFotoModal(${item.id}, '${escapeHtml(item.nama_item)}')">
+            <button class="btn btn-primary btn-sm" onclick="closeModal(); showUploadFotoModal(${item.id}, '${escapeHtml(item.nama_item)}', 'tab-gallery')">
               ⚙️ Kelola / Tambah Foto Galeri
             </button>
           </div>
 
-          ${Array.isArray(item.gallery_fotos) && item.gallery_fotos.length > 0 ? `
-            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-              ${item.gallery_fotos.map(gf => `
-                <div style="text-align: center; width: 105px;">
-                  <div style="width: 105px; height: 75px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border-gold); background: #000; display: flex; align-items: center; justify-content: center;">
-                    <img src="${escapeHtml(gf.foto_path)}" style="max-width: 100%; max-height: 100%; object-fit: cover; cursor: zoom-in;" onclick="openGlobalLightbox('${escapeHtml(gf.foto_path)}', '${escapeHtml(item.nama_item + ' - ' + (gf.label || 'Detail'))}')" title="Klik untuk memperbesar">
+          ${galleryCount > 0 ? `
+            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:14px;">
+              ${galleryList.map(gf => {
+                const labelText = getGalleryLabelDisplay(gf.label);
+                return `
+                  <div style="background:rgba(18,21,28,0.95); border:1px solid var(--border); border-radius:10px; padding:10px; text-align:center;">
+                    <div style="width:100%; height:120px; border-radius:6px; overflow:hidden; background:#0a0c10; display:flex; align-items:center; justify-content:center; cursor:zoom-in; border:1px solid var(--border-gold);" onclick="openGlobalLightbox('${escapeHtml(gf.foto_path)}', '${escapeHtml(item.nama_item + ' - ' + labelText)}')">
+                      <img src="${escapeHtml(gf.foto_path)}" style="max-width:100%; max-height:100%; object-fit:contain;" title="Klik untuk memperbesar (Lightbox)" onerror="this.onerror=null; this.src='/static/img/logo.png';">
+                    </div>
+                    <div style="font-size:11px; font-weight:700; color:var(--gold-light); margin-top:8px;">
+                      ${escapeHtml(labelText)}
+                    </div>
+                    ${gf.catatan ? `<div style="font-size:10px; color:var(--text-secondary); margin-top:3px; line-height:1.3;">${escapeHtml(gf.catatan)}</div>` : ''}
                   </div>
-                  <div style="font-size: 10.5px; color: var(--gold-light); margin-top: 4px; text-transform: capitalize; font-weight: 700;">
-                    ${escapeHtml(gf.label || 'detail')}
-                  </div>
-                  ${gf.catatan ? `<div style="font-size: 9.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(gf.catatan)}</div>` : ''}
-                </div>
-              `).join('')}
+                `;
+              }).join('')}
             </div>
           ` : `
-            <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.25); padding: 12px 14px; border-radius: 6px; border: 1px dashed var(--border);">
-              <div style="font-size: 12px; color: var(--text-muted);">
-                Belum ada foto galeri pendukung (tanda air/watermark, segel grading slab, benang pengaman, atau variasi cetak).
-              </div>
-              <button class="btn btn-primary btn-sm" style="font-size: 11px;" onclick="closeModal(); showUploadFotoModal(${item.id}, '${escapeHtml(item.nama_item)}')">
-                + Tambah Foto Sekarang
+            <div style="text-align:center; padding:40px 16px; background:rgba(255,255,255,0.015); border:1px dashed var(--border); border-radius:8px; color:var(--text-muted);">
+              <div style="font-size:32px; margin-bottom:8px;">📸</div>
+              <div style="font-size:13.5px; font-weight:600; color:var(--text-secondary);">Belum Ada Foto Galeri Khusus</div>
+              <div style="font-size:12px; margin-top:4px; margin-bottom:16px;">Tambahkan foto tanda air (watermark), holder slab grading, benang pengaman, atau variasi cetakan.</div>
+              <button class="btn btn-primary btn-sm" onclick="closeModal(); showUploadFotoModal(${item.id}, '${escapeHtml(item.nama_item)}', 'tab-gallery')">
+                + Unggah Foto Galeri Sekarang
               </button>
             </div>
           `}
-        </div>
-
-        <!-- Specifications & Stock Grid -->
-        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap:12px; background:rgba(255,255,255,0.02); padding:16px; border-radius:10px; border:1px solid var(--border);">
-          <div>
-            <div style="font-size:11px; color:var(--text-muted);">Kode Item</div>
-            <div style="font-weight:700; color:var(--gold-light); font-size:13px; font-family:monospace;">${escapeHtml(item.kode_item || '-')}</div>
-          </div>
-          <div>
-            <div style="font-size:11px; color:var(--text-muted);">Batch Pembelian</div>
-            <div style="font-weight:600; color:var(--text-primary); font-size:13px;">${escapeHtml(item.batch_kode || 'Pembelian Single')}</div>
-          </div>
-          <div>
-            <div style="font-size:11px; color:var(--text-muted);">Negara &amp; Tahun</div>
-            <div style="font-weight:600; color:var(--text-primary); font-size:13px;">${escapeHtml(item.negara || 'Indonesia')} ${item.tahun ? `(${escapeHtml(item.tahun)})` : ''}</div>
-          </div>
-          <div>
-            <div style="font-size:11px; color:var(--text-muted);">Denominasi / Nominal</div>
-            <div style="font-weight:600; color:var(--text-primary); font-size:13px;">${escapeHtml(item.denominasi || item.nominal || '-')}</div>
-          </div>
-          <div>
-            <div style="font-size:11px; color:var(--text-muted);">Sisa Stok / Total</div>
-            <div style="font-weight:700; font-size:13.5px; color:${isHabis ? 'var(--danger)' : 'var(--success)'};">${qtyTersisa} / ${item.qty} pcs ${isHabis ? '(HABIS)' : ''}</div>
-          </div>
-          <div>
-            <div style="font-size:11px; color:var(--text-muted);">Qty Terjual</div>
-            <div style="font-weight:600; font-size:13px; color:var(--text-primary);">${item.qty_terjual || 0} pcs</div>
-          </div>
-          <div>
-            <div style="font-size:11px; color:var(--text-muted);">HPP Modal per Pcs</div>
-            <div style="font-weight:700; color:var(--gold-light); font-size:13.5px;">${formatRupiah(item.hpp_per_pcs)}</div>
-          </div>
-          <div>
-            <div style="font-size:11px; color:var(--text-muted);">Harga Beli Total / Ongkir</div>
-            <div style="font-weight:600; color:var(--text-secondary); font-size:12.5px;">${formatRupiah(item.harga)} / ${formatRupiah(item.ongkir)}</div>
-          </div>
-          <div>
-            <div style="font-size:11px; color:var(--text-muted);">Harga Jual Target</div>
-            <div style="font-weight:700; color:var(--success); font-size:13.5px;">${formatRupiah(item.harga_jual || 0)}</div>
-          </div>
-          <div>
-            <div style="font-size:11px; color:var(--text-muted);">Supplier &amp; Tanggal Beli</div>
-            <div style="font-weight:600; color:var(--text-primary); font-size:12.5px;">${escapeHtml(item.supplier_nama || item.perolehan || '-')} ${item.tanggal_beli ? `• ${formatDate(item.tanggal_beli)}` : ''}</div>
-          </div>
         </div>
       </div>
     `;
@@ -582,13 +648,29 @@ async function showViewItemModal(id) {
     const footer = `
       <button type="button" class="btn btn-secondary" onclick="closeModal()">Tutup</button>
       <button type="button" class="btn btn-secondary" onclick="printHolderLabel(${item.id})">🏷️ Cetak Label (2x2")</button>
-      <button type="button" class="btn btn-secondary" onclick="closeModal(); showUploadFotoModal(${item.id}, '${escapeHtml(item.nama_item)}')">📸 Unggah Foto (OBV/REV)</button>
+      <button type="button" class="btn btn-secondary" onclick="closeModal(); showUploadFotoModal(${item.id}, '${escapeHtml(item.nama_item)}')">📸 Unggah / Kelola Foto</button>
       <button type="button" class="btn btn-secondary" onclick="closeModal(); showEditKoleksiModal(${item.id})">✏️ Edit Data</button>
       <button type="button" class="btn btn-success" onclick="closeModal(); showQuickSaleModal(${item.id})" ${isHabis ? 'disabled' : ''}>💰 Jual Item</button>
     `;
 
+    const titleHtml = `
+      <div style="display:flex; justify-content:space-between; align-items:center; width:100%; padding-right:14px;">
+        <span style="font-weight:700; color:var(--text-primary); font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:55%;">
+          👁️ Rincian Lengkap: ${escapeHtml(item.nama_item)}
+        </span>
+        <div style="display:flex; gap:6px; flex-shrink:0;">
+          <button type="button" class="btn btn-sm btn-primary" id="detailTabBtnInfo" onclick="switchDetailTab('info')" style="font-size:11px; padding:4px 10px;">
+            📋 Rincian &amp; Info
+          </button>
+          <button type="button" class="btn btn-sm btn-secondary" id="detailTabBtnGallery" onclick="switchDetailTab('gallery')" style="font-size:11px; padding:4px 10px;">
+            📸 Galeri Multi-Foto (${galleryCount})
+          </button>
+        </div>
+      </div>
+    `;
+
     openModal({
-      title: `👁️ Rincian Lengkap Item: ${escapeHtml(item.nama_item)}`,
+      title: titleHtml,
       body,
       footer,
       size: 'lg'

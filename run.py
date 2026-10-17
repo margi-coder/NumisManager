@@ -157,16 +157,26 @@ def check_dependencies_installed():
 def install_dependencies(pip_bin):
     req_path = get_requirements_path()
     if not req_path.exists():
-        print(f"{Colors.YELLOW}[WARN] Berkas requirements.txt tidak ditemukan di root maupun dependencies/.{Colors.RESET}")
+        safe_print(f"{Colors.YELLOW}[WARN] Berkas requirements.txt tidak ditemukan di root maupun dependencies/.{Colors.RESET}")
         return
 
-    print(f"{Colors.CYAN}[DEPENDENCY] Menginstal/memperbarui paket dari {req_path.name}...{Colors.RESET}")
+    wheels_dir = ROOT_DIR / "dependencies" / "wheels"
+    if wheels_dir.exists() and any(wheels_dir.glob("*.whl")):
+        safe_print(f"{Colors.CYAN}[DEPENDENCY] Menemukan offline wheels di {wheels_dir.name} ({len(list(wheels_dir.glob('*.whl')))} file). Menginstal secara offline tanpa internet...{Colors.RESET}")
+        cmd = [str(pip_bin), "install", "--no-index", f"--find-links={wheels_dir}", "-r", str(req_path)]
+        result = subprocess.run(cmd)
+        if result.returncode == 0:
+            safe_print(f"{Colors.GREEN}[OK] Seluruh dependensi Python berhasil diinstal secara offline.{Colors.RESET}")
+            return
+        safe_print(f"{Colors.YELLOW}[INFO] Beralih ke instalasi standar pip...{Colors.RESET}")
+
+    safe_print(f"{Colors.CYAN}[DEPENDENCY] Menginstal/memperbarui paket dari {req_path.name}...{Colors.RESET}")
     cmd = [str(pip_bin), "install", "-r", str(req_path)]
     result = subprocess.run(cmd)
     if result.returncode != 0:
-        print(f"{Colors.RED}[ERROR] Gagal menginstal dependensi. Silakan periksa koneksi internet Anda.{Colors.RESET}")
+        safe_print(f"{Colors.RED}[ERROR] Gagal menginstal dependensi.{Colors.RESET}")
         sys.exit(result.returncode)
-    print(f"{Colors.GREEN}[OK] Seluruh dependensi Python siap digunakan.{Colors.RESET}")
+    safe_print(f"{Colors.GREEN}[OK] Seluruh dependensi Python siap digunakan.{Colors.RESET}")
 
 
 def ensure_vendor_assets():
@@ -258,9 +268,17 @@ def run_diagnostics():
     # Check packages
     missing = check_dependencies_installed()
     if missing:
-        print(f"Status Dependensi   : {Colors.YELLOW}[KURANG: {', '.join(missing)}]{Colors.RESET}")
+        safe_print(f"Status Dependensi   : {Colors.YELLOW}[KURANG: {', '.join(missing)}]{Colors.RESET}")
     else:
-        print(f"Status Dependensi   : {Colors.GREEN}[LENGKAP - Semua paket terpasang]{Colors.RESET}")
+        safe_print(f"Status Dependensi   : {Colors.GREEN}[LENGKAP - Semua paket terpasang]{Colors.RESET}")
+
+    wheels_dir = ROOT_DIR / "dependencies" / "wheels"
+    if wheels_dir.exists():
+        whl_files = list(wheels_dir.glob("*.whl"))
+        whl_size = sum(f.stat().st_size for f in whl_files) / (1024 * 1024)
+        safe_print(f"Offline Wheels      : {Colors.GREEN}[ADA] {len(whl_files)} paket wheel ({whl_size:.1f} MB){Colors.RESET}")
+    else:
+        safe_print(f"Offline Wheels      : {Colors.GRAY}[TIDAK ADA]{Colors.RESET}")
 
     # Database
     db_path = ROOT_DIR / "database" / "numismatik.db"

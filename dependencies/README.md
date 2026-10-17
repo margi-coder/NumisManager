@@ -18,9 +18,17 @@ Direktori ini mengelola seluruh dependensi pustaka Python yang dibutuhkan oleh s
 
 ---
 
-## ⚡ Manajemen Otomatis oleh `run.py`
+## ⚡ Manajemen Otomatis & Instalasi Offline (Tanpa Internet)
 
-Anda tidak perlu menginstal dependensi ini secara manual. Skrip peluncur **`run.py`** akan secara otomatis:
-1. Mendeteksi apakah virtual environment (`.venv/`) sudah ada. Jika belum, `.venv/` akan otomatis dibuat sesuai OS Anda (`.venv\Scripts\` di Windows atau `.venv/bin/` di Linux/macOS).
-2. Memeriksa kecukupan pustaka yang terpasang di `.venv`.
-3. Menjalankan `pip install -r requirements.txt` secara otomatis jika ada pustaka yang belum terpasang.
+Direktori ini dilengkapi dengan folder **`dependencies/wheels/`** berisi 60 paket wheel biner offline (~20.2 MB) yang mendukung:
+* **Windows**: Windows 11, 10, 8, 7 (64-bit AMD64/x86_64)
+* **Linux**: Ubuntu, Debian, RedHat, CentOS, Fedora, Rocky Linux (manylinux 64-bit)
+* **Semua OS**: Pustaka murni Python (*pure Python wheels*) yang bekerja lintas platform.
+
+Skrip peluncur pintar **`run.py`** secara otomatis akan:
+1. Mendeteksi folder `dependencies/wheels/`.
+2. Menginstal seluruh paket menggunakan perintah offline:
+   ```bash
+   pip install --no-index --find-links=dependencies/wheels -r requirements.txt
+   ```
+3. Jika dijalankan di komputer yang **sama sekali tidak terhubung ke internet**, seluruh dependensi akan tetap terpasang dengan sukses dalam hitungan detik.

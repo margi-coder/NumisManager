@@ -48,10 +48,12 @@ DashboardCollection/
 │   ├── calculations.py         # Formula HPP (single/batch) & kalkulasi profit
 │   └── export_excel.py         # Styler & generator laporan spreadsheet Excel
 ├── steering/                   # Tata Kelola & Dokumen Strategis (Governance)
-│   └── STEERING.md             # Single Source of Truth arsitektur & aturan domain
+│   ├── STEERING.md             # Single Source of Truth arsitektur & aturan domain
+│   └── GEMINI.md               # Aturan operasional untuk Antigravity / AI Agents
 ├── dependencies/               # Manajemen Dependensi & Pustaka
+│   ├── wheels/                 # Paket binary offline (.whl) untuk Windows & Linux
 │   ├── requirements.txt        # Salinan manifest dependensi
-│   └── README.md               # Dokumentasi stack & manajemen dependensi
+│   └── README.md               # Dokumentasi stack & panduan instalasi offline
 ├── tools/                      # Utilitas & Binary Pembantu Eksternal
 │   ├── bin/                    # Tempat penyimpanan binary (misal: cloudflared)
 │   └── README.md               # Dokumentasi utilitas binary multi-OS
@@ -68,7 +70,6 @@ DashboardCollection/
 │   ├── implementation_steps.md # 12 Tahapan implementasi dari awal hingga siap rilis
 │   ├── panduan_deploy.md       # Panduan deploy lokal, WiFi, Cloudflare Tunnel, VPS & PaaS
 │   └── report_line_of_code.md  # Laporan statistik & metrik baris kode (LOC)
-├── GEMINI.md                   # Aturan operasional untuk Antigravity / AI Agents
 ├── .gitignore                  # Konfigurasi pengecualian version control
 ├── main.py                     # Entry point server aplikasi FastAPI
 ├── requirements.txt            # Manifest utama dependensi library Python

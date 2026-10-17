@@ -1,6 +1,6 @@
 # NumisManager - Antigravity Agent Guidelines & Operational Rules
 
-Dokumen ini dibaca secara otomatis oleh Antigravity dan agen AI lainnya sebagai **panduan operasional langsung** saat bekerja di repositori ini. Untuk tata kelola strategis lengkap, rujuk [steering/STEERING.md](file:///g:/AntigravityWorkspace/DashboardCollection/steering/STEERING.md).
+Dokumen ini dibaca secara otomatis oleh Antigravity dan agen AI lainnya sebagai **panduan operasional langsung** saat bekerja di repositori ini. Untuk tata kelola strategis lengkap, rujuk [STEERING.md](file:///g:/AntigravityWorkspace/DashboardCollection/steering/STEERING.md).
 
 ---
 

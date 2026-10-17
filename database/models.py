@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, ConfigDict, Field
 
 CREATE_TABLES_SQL = [
@@ -164,6 +164,10 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -262,6 +266,11 @@ class KoleksiCreate(BaseModel):
     foto_path: Optional[str] = None
     foto_obv: Optional[str] = None
     foto_rev: Optional[str] = None
+    foto_detail: Optional[str] = None
+    lembaga_grading: Optional[str] = "-"
+    nomor_sertifikasi: Optional[str] = None
+    grade_numerik: Optional[str] = None
+    grading_url: Optional[str] = None
     supplier_id: Optional[int] = None
     batch_id: Optional[int] = None
     perolehan: Optional[str] = None
@@ -294,6 +303,11 @@ class KoleksiUpdate(BaseModel):
     foto_path: Optional[str] = None
     foto_obv: Optional[str] = None
     foto_rev: Optional[str] = None
+    foto_detail: Optional[str] = None
+    lembaga_grading: Optional[str] = None
+    nomor_sertifikasi: Optional[str] = None
+    grade_numerik: Optional[str] = None
+    grading_url: Optional[str] = None
     supplier_id: Optional[int] = None
     batch_id: Optional[int] = None
     perolehan: Optional[str] = None
@@ -311,6 +325,15 @@ class PecahStokRequest(BaseModel):
     harga_jual_pcs: float = 0.0
     nama_item: Optional[str] = None
     status_koleksi: str = "stock_jual"
+
+class KoleksiFotoItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    koleksi_id: int
+    label: str = "detail"
+    foto_path: str
+    catatan: Optional[str] = None
+    created_at: Optional[str] = None
 
 class KoleksiResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -334,6 +357,11 @@ class KoleksiResponse(BaseModel):
     foto_path: Optional[str] = None
     foto_obv: Optional[str] = None
     foto_rev: Optional[str] = None
+    foto_detail: Optional[str] = None
+    lembaga_grading: Optional[str] = "-"
+    nomor_sertifikasi: Optional[str] = None
+    grade_numerik: Optional[str] = None
+    grading_url: Optional[str] = None
     supplier_id: Optional[int] = None
     supplier_nama: Optional[str] = None
     batch_id: Optional[int] = None
@@ -353,6 +381,7 @@ class KoleksiResponse(BaseModel):
     status_koleksi: str
     is_pecahan: int
     parent_id: Optional[int] = None
+    gallery_fotos: Optional[List[Dict[str, Any]]] = None
     created_by: Optional[int] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None

@@ -3,17 +3,28 @@ from typing import Optional, Dict, Any
 import bcrypt
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
 import sqlite3
 from database.db import get_db_connection
 
-SECRET_KEY = "numismatik-secret-2024-XxYyZz"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 480
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env configuration
+env_path = Path(__file__).resolve().parent.parent / ".env"
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
+else:
+    load_dotenv()
+
+SECRET_KEY = os.getenv("SECRET_KEY", "numismatik-secret-2024-XxYyZz")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "480"))
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 def verify_password(plain: str, hashed: str) -> bool:
     """Verifikasi kecocokan password teks biasa dengan hash tersimpan."""
@@ -42,13 +53,19 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def get_current_user(token: str = Depends(oauth2_scheme)) -> Dict[str, Any]:
-    """Mengambil informasi pengguna aktif berdasarkan token JWT."""
+def get_current_user(
+    header_token: Optional[str] = Depends(oauth2_scheme),
+    query_token: Optional[str] = Query(None, alias="token")
+) -> Dict[str, Any]:
+    """Mengambil informasi pengguna aktif berdasarkan token JWT dari header atau parameter query."""
+    token = header_token or query_token
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Autentikasi gagal atau sesi telah berakhir",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    if not token:
+        raise credentials_exception
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")

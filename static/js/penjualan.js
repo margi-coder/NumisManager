@@ -377,6 +377,7 @@ function renderPenjualanTable(data, total, page) {
         <td><span class="badge" style="background:rgba(255,255,255,0.06); border:1px solid var(--border);">${PLATFORM_LABELS[sale.platform_jual] || sale.platform_jual || 'Direct'}</span></td>
         <td>
           <div class="td-actions">
+            <button class="btn btn-secondary btn-sm" title="Cetak Nota Bukti Transaksi Resmi" onclick="printNotaPenjualan(${sale.id})">🧾 Nota</button>
             <button class="btn btn-secondary btn-sm" onclick="showEditPenjualanModal(${sale.id})">Edit</button>
             <button class="btn btn-danger btn-sm" onclick="deletePenjualan(${sale.id})">Hapus</button>
           </div>
@@ -501,4 +502,13 @@ async function deletePenjualan(id) {
   } catch (err) {
     showToast('Gagal menghapus transaksi: ' + err.message, 'error');
   }
+}
+
+/**
+ * Membuka jendela pracetak nota penjualan resmi
+ */
+function printNotaPenjualan(id) {
+  const token = API.getToken();
+  const url = `/api/penjualan/${id}/nota-html?token=${encodeURIComponent(token || '')}`;
+  window.open(url, '_blank', 'width=780,height=850');
 }

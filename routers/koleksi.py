@@ -3,8 +3,8 @@ import math
 import uuid
 from pathlib import Path
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status
+from fastapi.responses import FileResponse, HTMLResponse
 import aiofiles
 import sqlite3
 from database.db import get_db
@@ -172,22 +172,31 @@ def create_koleksi(
     kode_item = payload.kode_item or generate_kode_item(conn)
     foto_obv = payload.foto_obv or payload.foto_path
     foto_rev = payload.foto_rev
+    foto_detail = payload.foto_detail
     foto_path = payload.foto_path or foto_obv
+    lembaga_grading = payload.lembaga_grading or "-"
+    nomor_sertifikasi = payload.nomor_sertifikasi
+    grade_numerik = payload.grade_numerik
+    grading_url = payload.grading_url
 
     cursor.execute(
         """
         INSERT INTO koleksi (
             kode_item, nama_item, nomor_seri, tahun, denominasi, cetakan, grade, jenis, negara,
             bahan, warna_dominan, dimensi, kondisi_fisik, lokasi_simpan, detail,
-            catatan_internal, foto_path, foto_obv, foto_rev, supplier_id, batch_id, perolehan,
-            link_pembelian, tanggal_beli, status, qty, qty_terjual, harga, ongkir,
-            hpp, hpp_per_pcs, harga_jual, status_koleksi, is_pecahan, parent_id, created_by
+            catatan_internal, foto_path, foto_obv, foto_rev, foto_detail,
+            lembaga_grading, nomor_sertifikasi, grade_numerik, grading_url,
+            supplier_id, batch_id, perolehan, link_pembelian, tanggal_beli, status,
+            qty, qty_terjual, harga, ongkir, hpp, hpp_per_pcs, harga_jual, status_koleksi,
+            is_pecahan, parent_id, created_by
         ) VALUES (
             ?, ?, ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?, ?,
-            ?, ?, ?, ?, ?, ?, ?,
-            ?, ?, ?, ?, 0, ?, ?,
-            ?, ?, ?, ?, 0, NULL, ?
+            ?, ?, ?, ?, ?,
+            ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?,
+            ?, 0, ?, ?, ?, ?, ?, ?,
+            0, NULL, ?
         )
         """,
         (
@@ -195,7 +204,8 @@ def create_koleksi(
             payload.cetakan, payload.grade, payload.jenis, payload.negara,
             payload.bahan, payload.warna_dominan, payload.dimensi, payload.kondisi_fisik,
             payload.lokasi_simpan, payload.detail, payload.catatan_internal,
-            foto_path, foto_obv, foto_rev,
+            foto_path, foto_obv, foto_rev, foto_detail,
+            lembaga_grading, nomor_sertifikasi, grade_numerik, grading_url,
             payload.supplier_id, payload.batch_id, payload.perolehan, payload.link_pembelian,
             tanggal_beli, payload.status or "pesan", qty, payload.harga, payload.ongkir,
             hpp, hpp_per_pcs, payload.harga_jual, payload.status_koleksi or "stock_jual",
@@ -215,7 +225,7 @@ def get_koleksi_detail(
     conn: sqlite3.Connection = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Mendapatkan detail item koleksi lengkap dengan data supplier dan batch."""
+    """Mendapatkan detail item koleksi lengkap dengan data supplier, batch, dan galeri foto."""
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -235,7 +245,16 @@ def get_koleksi_detail(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Item koleksi tidak ditemukan"
         )
-    return dict(item)
+    item_dict = dict(item)
+
+    # Ambil galeri foto pendukung
+    cursor.execute(
+        "SELECT id, koleksi_id, label, foto_path, catatan, created_at FROM koleksi_foto WHERE koleksi_id = ? ORDER BY id ASC",
+        (koleksi_id,)
+    )
+    item_dict["gallery_fotos"] = [dict(r) for r in cursor.fetchall()]
+
+    return item_dict
 
 @router.put("/{koleksi_id}")
 def update_koleksi(
@@ -294,6 +313,11 @@ def update_koleksi(
         ("foto_path", payload.foto_path),
         ("foto_obv", payload.foto_obv),
         ("foto_rev", payload.foto_rev),
+        ("foto_detail", payload.foto_detail),
+        ("lembaga_grading", payload.lembaga_grading),
+        ("nomor_sertifikasi", payload.nomor_sertifikasi),
+        ("grade_numerik", payload.grade_numerik),
+        ("grading_url", payload.grading_url),
         ("supplier_id", payload.supplier_id),
         ("batch_id", payload.batch_id),
         ("perolehan", payload.perolehan),
@@ -512,3 +536,274 @@ def pecah_stok_koleksi(
         "parent_sisa_qty": new_parent_qty,
         "pecahan_item": child_item
     }
+
+# ==============================================================================
+# Multi-Foto Galeri (Obverse, Reverse, Detail Watermark/Slab)
+# ==============================================================================
+
+@router.post("/{koleksi_id}/gallery")
+async def upload_gallery_foto(
+    koleksi_id: int,
+    foto: UploadFile = File(...),
+    label: str = Form("detail"),
+    catatan: Optional[str] = Form(None),
+    conn: sqlite3.Connection = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Mengunggah foto tambahan ke galeri item koleksi (detail watermark, slab, obv, rev)."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM koleksi WHERE id = ?", (koleksi_id,))
+    if not cursor.fetchone():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item koleksi tidak ditemukan")
+
+    STATIC_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    ext = Path(foto.filename).suffix.lower()
+    if ext not in [".jpg", ".jpeg", ".png", ".webp", ".svg"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Format file tidak didukung. Gunakan JPG, PNG, WEBP, atau SVG."
+        )
+
+    unique_filename = f"gal_{koleksi_id}_{uuid.uuid4().hex[:8]}{ext}"
+    file_path = STATIC_UPLOADS_DIR / unique_filename
+
+    async with aiofiles.open(file_path, "wb") as out_file:
+        content = await foto.read()
+        await out_file.write(content)
+
+    foto_path = f"/static/uploads/{unique_filename}"
+    cursor.execute(
+        """
+        INSERT INTO koleksi_foto (koleksi_id, label, foto_path, catatan)
+        VALUES (?, ?, ?, ?)
+        """,
+        (koleksi_id, label.strip(), foto_path, catatan)
+    )
+    conn.commit()
+    foto_id = cursor.lastrowid
+
+    return {
+        "status": "success",
+        "id": foto_id,
+        "koleksi_id": koleksi_id,
+        "label": label,
+        "foto_path": foto_path,
+        "catatan": catatan
+    }
+
+@router.get("/{koleksi_id}/gallery")
+def list_gallery_foto(
+    koleksi_id: int,
+    conn: sqlite3.Connection = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Mendapatkan seluruh foto galeri untuk item tertentu."""
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, koleksi_id, label, foto_path, catatan, created_at FROM koleksi_foto WHERE koleksi_id = ? ORDER BY id ASC",
+        (koleksi_id,)
+    )
+    return [dict(r) for r in cursor.fetchall()]
+
+@router.delete("/{koleksi_id}/gallery/{foto_id}")
+def delete_gallery_foto(
+    koleksi_id: int,
+    foto_id: int,
+    conn: sqlite3.Connection = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Menghapus salah satu foto dari galeri koleksi."""
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT foto_path FROM koleksi_foto WHERE id = ? AND koleksi_id = ?",
+        (foto_id, koleksi_id)
+    )
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Foto galeri tidak ditemukan")
+
+    file_to_del = Path(__file__).resolve().parent.parent / row["foto_path"].lstrip("/")
+    if file_to_del.exists():
+        try:
+            file_to_del.unlink()
+        except Exception:
+            pass
+
+    cursor.execute("DELETE FROM koleksi_foto WHERE id = ?", (foto_id,))
+    conn.commit()
+    return {"status": "success", "message": "Foto galeri berhasil dihapus"}
+
+# ==============================================================================
+# Cetak Label Holder Koin / Uang Kertas (Stiker 2x2 inch / 5x5 cm)
+# ==============================================================================
+
+@router.get("/{koleksi_id}/label-html", response_class=HTMLResponse)
+def print_holder_label_html(
+    koleksi_id: int,
+    conn: sqlite3.Connection = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Menghasilkan tampilan siap cetak label holder koin/koleksi (ukuran 2x2 inch / 5x5 cm)."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM koleksi WHERE id = ?", (koleksi_id,))
+    item = cursor.fetchone()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item tidak ditemukan")
+
+    it = dict(item)
+    nama = it.get("nama_item", "Koleksi Numismatik")
+    negara = (it.get("negara") or "INDONESIA").upper()
+    tahun = it.get("tahun") or "-"
+    denominasi = it.get("denominasi") or "-"
+    nomor_seri = it.get("nomor_seri") or "-"
+    grade = it.get("grade") or "UNC"
+    lembaga = it.get("lembaga_grading") or "-"
+    no_sertif = it.get("nomor_sertifikasi") or ""
+    kode_item = it.get("kode_item") or f"ITM-{koleksi_id}"
+
+    grading_text = f"{lembaga} {it.get('grade_numerik') or grade}" if lembaga and lembaga != "-" else grade
+    if no_sertif:
+        grading_text += f"<br><small style='font-size:8px;color:#555;'>#{no_sertif}</small>"
+
+    html = f"""<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Label Holder - {kode_item}</title>
+<style>
+  @page {{
+    size: 50mm 50mm;
+    margin: 0;
+  }}
+  * {{
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Arial, sans-serif;
+  }}
+  body {{
+    background: #f0f0f0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+  }}
+  .label-container {{
+    width: 50mm;
+    height: 50mm;
+    background: #fff;
+    border: 1px dashed #bbb;
+    padding: 3mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    text-align: center;
+    position: relative;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  }}
+  .label-header {{
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: #b8860b;
+    border-bottom: 0.5px solid #d4af37;
+    padding-bottom: 1mm;
+    text-transform: uppercase;
+  }}
+  .country-year {{
+    font-size: 8.5px;
+    font-weight: 700;
+    color: #222;
+    margin-top: 1mm;
+  }}
+  .denom {{
+    font-size: 11px;
+    font-weight: 900;
+    color: #111;
+    margin: 1mm 0;
+  }}
+  .item-title {{
+    font-size: 7.5px;
+    color: #444;
+    line-height: 1.1;
+    max-height: 16px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }}
+  .grade-badge {{
+    display: inline-block;
+    background: #fdf5e6;
+    border: 0.8px solid #d4af37;
+    color: #8b6508;
+    font-size: 9px;
+    font-weight: 800;
+    padding: 1.5px 4px;
+    border-radius: 3px;
+    margin: 1.5mm auto 1mm auto;
+  }}
+  .serial-no {{
+    font-size: 7.5px;
+    font-family: monospace;
+    color: #333;
+    letter-spacing: 0.5px;
+  }}
+  .barcode-box {{
+    margin-top: 1mm;
+    font-size: 7px;
+    color: #666;
+    border-top: 0.5px dashed #ccc;
+    padding-top: 1mm;
+  }}
+  .btn-print {{
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #d4af37;
+    color: #000;
+    font-weight: bold;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  }}
+  @media print {{
+    body {{
+      background: none;
+    }}
+    .btn-print {{
+      display: none;
+    }}
+    .label-container {{
+      border: 0.5px solid #ccc;
+      box-shadow: none;
+      page-break-after: always;
+    }}
+  }}
+</style>
+</head>
+<body>
+<button class="btn-print" onclick="window.print()">🖨️ Cetak Label</button>
+<div class="label-container">
+  <div class="label-header">NumisManager Archive</div>
+  <div class="country-year">{negara} • {tahun}</div>
+  <div class="denom">{denominasi}</div>
+  <div class="item-title">{nama}</div>
+  <div>
+    <div class="grade-badge">{grading_text}</div>
+  </div>
+  <div class="serial-no">SN: {nomor_seri}</div>
+  <div class="barcode-box">
+    <strong>{kode_item}</strong>
+  </div>
+</div>
+<script>
+  // Auto trigger print dialog on query param ?print=1
+  if (window.location.search.includes('print=1')) {{
+    window.onload = function() {{ window.print(); }}
+  }}
+</script>
+</body>
+</html>"""
+    return HTMLResponse(content=html)

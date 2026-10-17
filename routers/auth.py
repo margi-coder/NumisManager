@@ -2,7 +2,7 @@ from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 import sqlite3
 from database.db import get_db
-from database.models import UserCreate, UserUpdate, LoginRequest, UserResponse
+from database.models import UserCreate, UserUpdate, LoginRequest, UserResponse, ChangePasswordRequest
 from utils.auth_utils import (
     verify_password,
     get_password_hash,
@@ -180,3 +180,32 @@ def deactivate_user(
     )
     conn.commit()
     return {"message": "Pengguna berhasil dinonaktifkan"}
+
+@router.put("/change-password")
+def change_password(
+    payload: ChangePasswordRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    conn: sqlite3.Connection = Depends(get_db)
+):
+    """Mengubah kata sandi akun pengguna yang sedang aktif login."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT hashed_password FROM users WHERE id = ?", (current_user["id"],))
+    user_row = cursor.fetchone()
+    if not user_row or not verify_password(payload.old_password, user_row["hashed_password"]):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kata sandi lama yang Anda masukkan salah"
+        )
+    if len(payload.new_password) < 4:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kata sandi baru minimal 4 karakter"
+        )
+
+    new_hash = get_password_hash(payload.new_password)
+    cursor.execute(
+        "UPDATE users SET hashed_password = ?, updated_at = datetime('now','localtime') WHERE id = ?",
+        (new_hash, current_user["id"])
+    )
+    conn.commit()
+    return {"status": "success", "message": "Kata sandi berhasil diperbarui"}

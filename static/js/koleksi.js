@@ -356,6 +356,7 @@ function renderKoleksiTable(data, total, page) {
           <div class="td-actions" style="justify-content:center;">
             <button class="btn btn-secondary btn-icon" title="Lihat Detail Item" onclick="showViewItemModal(${item.id})">👁️</button>
             <button class="btn btn-secondary btn-icon" title="Edit Koleksi" onclick="showEditKoleksiModal(${item.id})">✏️</button>
+            <button class="btn btn-secondary btn-icon" title="Cetak Label Holder (2x2 inci)" onclick="printHolderLabel(${item.id})">🏷️</button>
             <button class="btn btn-secondary btn-icon" title="Unggah Foto (Obv/Rev)" onclick="showUploadFotoModal(${item.id}, '${escapeHtml(item.nama_item)}')">📸</button>
             <button class="btn btn-secondary btn-icon" title="Pecah Stok Jadi Item Baru" onclick="showPecahStokModal(${item.id}, ${qtyTersisa})" ${isHabis ? 'disabled' : ''}>✂️</button>
             <button class="btn btn-success btn-icon" title="Quick Sale / Jual Item" onclick="showQuickSaleModal(${item.id})" ${isHabis ? 'disabled' : ''}>💰</button>
@@ -383,6 +384,15 @@ function renderKoleksiTable(data, total, page) {
  */
 function viewImageLightbox(url, title) {
   openGlobalLightbox(url, title);
+}
+
+/**
+ * Membuka jendela pracetak label stiker holder koin/uang kertas (2x2 inci / 5x5 cm)
+ */
+function printHolderLabel(id) {
+  const token = API.getToken();
+  const url = `/api/koleksi/${id}/label-html?token=${encodeURIComponent(token || '')}`;
+  window.open(url, '_blank', 'width=520,height=560');
 }
 
 
@@ -468,10 +478,41 @@ async function showViewItemModal(id) {
             </div>
 
             ${item.nomor_seri ? `<div style="font-size:13.5px; color:var(--gold-light); margin-bottom:6px;"><strong>Nomor Seri:</strong> <code>${escapeHtml(item.nomor_seri)}</code></div>` : ''}
+            ${item.lembaga_grading && item.lembaga_grading !== '-' ? `
+              <div style="margin: 8px 0; display: inline-flex; align-items: center; gap: 8px; background: rgba(212, 175, 55, 0.1); border: 1px solid var(--border-gold); padding: 5px 10px; border-radius: 6px;">
+                <span style="font-size: 14px;">🏛️</span>
+                <span style="font-size: 12.5px; font-weight: 800; color: var(--gold-light);">
+                  ${escapeHtml(item.lembaga_grading)} ${escapeHtml(item.grade_numerik || item.grade || '')}
+                </span>
+                ${item.nomor_sertifikasi ? `<span style="font-size: 11px; color: var(--text-secondary); font-family: monospace;">#${escapeHtml(item.nomor_sertifikasi)}</span>` : ''}
+                ${item.grading_url ? `<a href="${escapeHtml(item.grading_url)}" target="_blank" rel="noopener noreferrer" style="font-size: 11px; color: var(--info); text-decoration: underline; margin-left: 4px;">Verifikasi ↗</a>` : ''}
+              </div>
+            ` : ''}
             ${(item.detail || item.sertifikasi) ? `<div style="font-size:12px; color:var(--text-secondary); margin-bottom:4px;"><strong>Detail / Sertifikasi:</strong> ${escapeHtml(item.detail || item.sertifikasi)}</div>` : ''}
             ${item.catatan_internal || item.catatan ? `<div style="font-size:12px; color:var(--text-muted); font-style:italic; margin-top:4px;">"${escapeHtml(item.catatan_internal || item.catatan)}"</div>` : ''}
           </div>
         </div>
+
+        ${Array.isArray(item.gallery_fotos) && item.gallery_fotos.length > 0 ? `
+          <!-- Multi-Photo Gallery Preview Strip -->
+          <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 14px;">
+            <div style="font-size: 11.5px; font-weight: 700; color: var(--gold-light); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">
+              📸 Galeri Foto Khusus (Watermark, Slab, &amp; Detail):
+            </div>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+              ${item.gallery_fotos.map(gf => `
+                <div style="text-align: center; width: 100px;">
+                  <div style="width: 100px; height: 70px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border-gold); background: #000; display: flex; align-items: center; justify-content: center;">
+                    <img src="${escapeHtml(gf.foto_path)}" style="max-width: 100%; max-height: 100%; object-fit: cover; cursor: zoom-in;" onclick="openGlobalLightbox('${escapeHtml(gf.foto_path)}', '${escapeHtml(item.nama_item + ' - ' + (gf.label || 'Detail'))}')" title="Klik untuk memperbesar">
+                  </div>
+                  <div style="font-size: 10.5px; color: var(--text-secondary); margin-top: 4px; text-transform: capitalize; font-weight: 600;">
+                    ${escapeHtml(gf.label || 'detail')}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
 
         <!-- Specifications & Stock Grid -->
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap:12px; background:rgba(255,255,255,0.02); padding:16px; border-radius:10px; border:1px solid var(--border);">
@@ -521,6 +562,7 @@ async function showViewItemModal(id) {
 
     const footer = `
       <button type="button" class="btn btn-secondary" onclick="closeModal()">Tutup</button>
+      <button type="button" class="btn btn-secondary" onclick="printHolderLabel(${item.id})">🏷️ Cetak Label (2x2")</button>
       <button type="button" class="btn btn-secondary" onclick="closeModal(); showUploadFotoModal(${item.id}, '${escapeHtml(item.nama_item)}')">📸 Unggah Foto (OBV/REV)</button>
       <button type="button" class="btn btn-secondary" onclick="closeModal(); showEditKoleksiModal(${item.id})">✏️ Edit Data</button>
       <button type="button" class="btn btn-success" onclick="closeModal(); showQuickSaleModal(${item.id})" ${isHabis ? 'disabled' : ''}>💰 Jual Item</button>
@@ -599,8 +641,42 @@ async function showEditKoleksiModal(id) {
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">Sertifikasi</label>
+            <label class="form-label">Sertifikasi / Slab</label>
             <input type="text" id="ekSertifikasi" class="form-control" value="${escapeHtml(detailText)}">
+          </div>
+        </div>
+
+        <!-- Official Grading Certification Section -->
+        <div style="background: rgba(212, 175, 55, 0.05); border: 1px solid var(--border-gold); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+          <div style="font-size: 12px; font-weight: 700; color: var(--gold-light); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+            <span>🏛️ Sertifikasi Lembaga Grading Resmi (Third-Party Grading)</span>
+          </div>
+          <div class="data-grid-4">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">Lembaga Grading</label>
+              <select id="ekLembagaGrading" class="form-select">
+                <option value="">- Tanpa Grading Resmi -</option>
+                <option value="PMG" ${item.lembaga_grading === 'PMG' ? 'selected' : ''}>PMG</option>
+                <option value="PCGS" ${item.lembaga_grading === 'PCGS' ? 'selected' : ''}>PCGS</option>
+                <option value="NGC" ${item.lembaga_grading === 'NGC' ? 'selected' : ''}>NGC</option>
+                <option value="NCS" ${item.lembaga_grading === 'NCS' ? 'selected' : ''}>NCS</option>
+                <option value="ANACS" ${item.lembaga_grading === 'ANACS' ? 'selected' : ''}>ANACS</option>
+                <option value="ICG" ${item.lembaga_grading === 'ICG' ? 'selected' : ''}>ICG</option>
+                <option value="Lainnya" ${item.lembaga_grading === 'Lainnya' ? 'selected' : ''}>Lainnya</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">No. Sertifikasi</label>
+              <input type="text" id="ekNomorSertifikasi" class="form-control" value="${escapeHtml(item.nomor_sertifikasi || '')}" placeholder="cth: 2198371-002">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">Grade Numerik / Label</label>
+              <input type="text" id="ekGradeNumerik" class="form-control" value="${escapeHtml(item.grade_numerik || '')}" placeholder="cth: 66 EPQ / MS65">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">URL Verifikasi</label>
+              <input type="url" id="ekGradingUrl" class="form-control" value="${escapeHtml(item.grading_url || '')}" placeholder="https://www.pmgnotes.com/certlookup/...">
+            </div>
           </div>
         </div>
 
@@ -688,6 +764,10 @@ async function submitUpdateKoleksi(id) {
     harga_jual: parseFloat(document.getElementById('ekHargaJual')?.value || '0'),
     status_koleksi: document.getElementById('ekStatusKoleksi')?.value,
     status: document.getElementById('ekStatus')?.value,
+    lembaga_grading: document.getElementById('ekLembagaGrading')?.value.trim() || null,
+    nomor_sertifikasi: document.getElementById('ekNomorSertifikasi')?.value.trim() || null,
+    grade_numerik: document.getElementById('ekGradeNumerik')?.value.trim() || null,
+    grading_url: document.getElementById('ekGradingUrl')?.value.trim() || null,
     catatan_internal: catatanVal,
     catatan: catatanVal
   };

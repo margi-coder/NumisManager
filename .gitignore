@@ -16,6 +16,14 @@ env/
 *.db-wal
 *.db-shm
 
+# Environment & Secrets
+.env
+!.env.example
+
+# Database Backups
+backups/
+!backups/.gitkeep
+
 # Large binary developer utilities & tools
 cloudflared.exe
 tools/bin/*

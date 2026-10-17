@@ -93,6 +93,30 @@ async function loadPembelianSingle() {
               </div>
             </div>
 
+            <div class="data-grid-3" style="background: rgba(212,175,55,0.05); padding: 10px 12px; border-radius: 6px; border: 1px solid var(--border-gold); margin-bottom: 14px;">
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" style="font-size:11px;">Lembaga Grading</label>
+                <select id="spLembagaGrading" class="form-select">
+                  <option value="">- Tanpa Grading Resmi -</option>
+                  <option value="PMG">PMG</option>
+                  <option value="PCGS">PCGS</option>
+                  <option value="NGC">NGC</option>
+                  <option value="NCS">NCS</option>
+                  <option value="ANACS">ANACS</option>
+                  <option value="ICG">ICG</option>
+                  <option value="Lainnya">Lainnya</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" style="font-size:11px;">No. Sertifikasi</label>
+                <input type="text" id="spNomorSertifikasi" class="form-control" placeholder="cth: 2198371-002">
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" style="font-size:11px;">Grade Numerik</label>
+                <input type="text" id="spGradeNumerik" class="form-control" placeholder="cth: 66 EPQ / MS65">
+              </div>
+            </div>
+
             <div class="form-group">
               <label class="form-label">Foto Item (Obverse / Depan &amp; Reverse / Belakang)</label>
               <div class="dual-photo-grid">
@@ -383,6 +407,9 @@ async function submitSinglePurchase() {
   const perolehan = document.getElementById('spPerolehan')?.value;
   const status = document.getElementById('spStatus')?.value;
   const statusKoleksi = document.getElementById('spStatusKoleksi')?.value;
+  const lembagaGrading = document.getElementById('spLembagaGrading')?.value || null;
+  const nomorSertifikasi = document.getElementById('spNomorSertifikasi')?.value.trim() || null;
+  const gradeNumerik = document.getElementById('spGradeNumerik')?.value.trim() || null;
   const tanggal = document.getElementById('spTanggal')?.value || null;
   const catatan = document.getElementById('spCatatan')?.value.trim() || null;
 
@@ -405,6 +432,9 @@ async function submitSinglePurchase() {
     grade,
     sertifikasi,
     detail: sertifikasi,
+    lembaga_grading: lembagaGrading,
+    nomor_sertifikasi: nomorSertifikasi,
+    grade_numerik: gradeNumerik,
     qty,
     harga: hargaBeli,
     harga_beli: hargaBeli,

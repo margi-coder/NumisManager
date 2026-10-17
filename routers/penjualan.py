@@ -2,6 +2,7 @@ from datetime import datetime
 import math
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import HTMLResponse
 import sqlite3
 from database.db import get_db
 from database.models import PenjualanCreate, PenjualanUpdate, PenjualanResponse
@@ -354,3 +355,423 @@ def delete_penjualan(
     conn.commit()
 
     return {"message": "Transaksi penjualan berhasil dihapus dan stok telah dikembalikan"}
+
+# ==============================================================================
+# Cetak Nota Bukti Transaksi Penjualan (HTML / Print / PDF Ready)
+# ==============================================================================
+
+@router.get("/{penjualan_id}/nota-html", response_class=HTMLResponse)
+def print_nota_penjualan_html(
+    penjualan_id: int,
+    auto_print: int = Query(0, description="1 untuk langsung memicu window.print()"),
+    conn: sqlite3.Connection = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Menghasilkan nota bukti transaksi penjualan resmi yang siap dicetak atau disimpan sebagai PDF."""
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT p.*, k.nama_item, k.nomor_seri, k.tahun, k.denominasi, k.grade,
+               k.lembaga_grading, k.nomor_sertifikasi, k.grade_numerik, k.negara, k.jenis
+        FROM penjualan p
+        JOIN koleksi k ON p.koleksi_id = k.id
+        WHERE p.id = ?
+        """,
+        (penjualan_id,)
+    )
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Transaksi penjualan tidak ditemukan"
+        )
+
+    data = dict(row)
+    kode_jual = data.get("kode_jual") or f"NOTA-{penjualan_id:04d}"
+    tanggal_jual = data.get("tanggal_jual") or datetime.now().strftime("%Y-%m-%d")
+    pembeli = data.get("pembeli") or "Pelanggan Terhormat"
+    platform = (data.get("platform_jual") or "Langsung / Direct").upper()
+    catatan = data.get("catatan") or "Terima kasih atas pembelian koleksi numismatik."
+
+    nama_item = data.get("nama_item") or "Item Koleksi"
+    nomor_seri = data.get("nomor_seri") or "-"
+    tahun = data.get("tahun") or "-"
+    denominasi = data.get("denominasi") or "-"
+    grade = data.get("grade") or "-"
+    lembaga = data.get("lembaga_grading")
+    grade_num = data.get("grade_numerik")
+    no_sertif = data.get("nomor_sertifikasi")
+
+    grade_display = grade
+    if lembaga and lembaga != "-":
+        grade_display = f"{lembaga} {grade_num or grade}"
+        if no_sertif:
+            grade_display += f" (Cert #{no_sertif})"
+
+    qty = int(data.get("qty_jual") or 1)
+    harga_pcs = float(data.get("harga_jual_pcs") or 0.0)
+    total_jual = qty * harga_pcs
+
+    def format_idr(val: float) -> str:
+        return f"Rp {int(val):,}".replace(",", ".")
+
+    auto_print_script = "window.onload = function() { window.print(); };" if auto_print == 1 else ""
+
+    html = f"""<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nota Transaksi - {kode_jual}</title>
+<style>
+  @page {{
+    size: A5 portrait;
+    margin: 10mm;
+  }}
+  * {{
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  }}
+  body {{
+    background: #f1f3f6;
+    color: #2c3e50;
+    display: flex;
+    justify-content: center;
+    padding: 24px;
+    min-height: 100vh;
+  }}
+  .nota-container {{
+    width: 148mm;
+    min-height: 200mm;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 14mm 12mm;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.08);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }}
+  .header {{
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2px solid #d4af37;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+  }}
+  .brand-title {{
+    font-size: 20px;
+    font-weight: 800;
+    color: #1a202c;
+    letter-spacing: 0.5px;
+  }}
+  .brand-title span {{
+    color: #b8860b;
+  }}
+  .brand-sub {{
+    font-size: 10.5px;
+    color: #718096;
+    margin-top: 2px;
+  }}
+  .nota-badge {{
+    text-align: right;
+  }}
+  .nota-badge .title {{
+    font-size: 13px;
+    font-weight: 800;
+    color: #b8860b;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }}
+  .nota-badge .number {{
+    font-size: 12px;
+    font-weight: 700;
+    color: #2d3748;
+    margin-top: 3px;
+  }}
+  .info-grid {{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    font-size: 11px;
+    background: #fafafc;
+    border: 1px solid #edf2f7;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 18px;
+  }}
+  .info-item span.label {{
+    color: #718096;
+    display: inline-block;
+    width: 80px;
+  }}
+  .info-item span.value {{
+    font-weight: 600;
+    color: #2d3748;
+  }}
+  table.items-table {{
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 18px;
+    font-size: 11px;
+  }}
+  table.items-table th {{
+    background: #2d3748;
+    color: #fff;
+    padding: 8px 10px;
+    text-align: left;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+  }}
+  table.items-table td {{
+    padding: 10px;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: top;
+  }}
+  .item-name {{
+    font-weight: 700;
+    color: #1a202c;
+    font-size: 11.5px;
+    margin-bottom: 3px;
+  }}
+  .item-meta {{
+    font-size: 10px;
+    color: #718096;
+  }}
+  .item-grade {{
+    display: inline-block;
+    background: #fdf5e6;
+    color: #8b6508;
+    border: 0.5px solid #d4af37;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-weight: 700;
+    font-size: 9.5px;
+    margin-top: 3px;
+  }}
+  .text-right {{
+    text-align: right;
+  }}
+  .text-center {{
+    text-align: center;
+  }}
+  .summary-section {{
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+  }}
+  .notes-box {{
+    width: 55%;
+    font-size: 10px;
+    color: #4a5568;
+    background: #f7fafc;
+    border-left: 3px solid #d4af37;
+    padding: 8px 10px;
+    border-radius: 0 4px 4px 0;
+  }}
+  .total-box {{
+    width: 40%;
+    text-align: right;
+  }}
+  .total-row {{
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #4a5568;
+    margin-bottom: 4px;
+  }}
+  .total-row.grand {{
+    border-top: 1.5px solid #2d3748;
+    padding-top: 6px;
+    margin-top: 6px;
+    font-size: 13px;
+    font-weight: 800;
+    color: #b8860b;
+  }}
+  .paid-badge {{
+    display: inline-block;
+    margin-top: 8px;
+    padding: 3px 12px;
+    background: #e6fffa;
+    color: #234e52;
+    border: 1px solid #38b2ac;
+    font-weight: 800;
+    font-size: 11px;
+    border-radius: 4px;
+    letter-spacing: 1px;
+  }}
+  .signatures {{
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+    padding-top: 10px;
+  }}
+  .sign-col {{
+    text-align: center;
+    width: 40%;
+    font-size: 10.5px;
+    color: #4a5568;
+  }}
+  .sign-line {{
+    margin-top: 50px;
+    border-bottom: 1px dashed #a0aec0;
+    width: 100%;
+  }}
+  .sign-name {{
+    margin-top: 4px;
+    font-weight: 700;
+    color: #2d3748;
+  }}
+  .footer-legal {{
+    text-align: center;
+    font-size: 9px;
+    color: #a0aec0;
+    margin-top: 20px;
+    border-top: 1px solid #edf2f7;
+    padding-top: 8px;
+  }}
+  .action-bar {{
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    gap: 10px;
+  }}
+  .action-btn {{
+    background: #d4af37;
+    color: #1a202c;
+    border: none;
+    font-weight: 700;
+    font-size: 13px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  }}
+  .action-btn.secondary {{
+    background: #4a5568;
+    color: #fff;
+  }}
+  @media print {{
+    body {{
+      background: #fff;
+      padding: 0;
+    }}
+    .action-bar {{
+      display: none;
+    }}
+    .nota-container {{
+      width: 100%;
+      min-height: auto;
+      box-shadow: none;
+      padding: 0;
+    }}
+  }}
+</style>
+</head>
+<body>
+<div class="action-bar">
+  <button class="action-btn" onclick="window.print()">🖨️ Cetak / Simpan PDF</button>
+  <button class="action-btn secondary" onclick="window.close()">❌ Tutup</button>
+</div>
+
+<div class="nota-container">
+  <div>
+    <div class="header">
+      <div>
+        <div class="brand-title">🪙 Numis<span>Manager</span></div>
+        <div class="brand-sub">Sistem Manajemen & Galeri Koleksi Numismatik</div>
+      </div>
+      <div class="nota-badge">
+        <div class="title">Nota Penjualan</div>
+        <div class="number">{kode_jual}</div>
+      </div>
+    </div>
+
+    <div class="info-grid">
+      <div>
+        <div class="info-item"><span class="label">Tanggal:</span> <span class="value">{tanggal_jual}</span></div>
+        <div class="info-item"><span class="label">Platform:</span> <span class="value">{platform}</span></div>
+      </div>
+      <div>
+        <div class="info-item"><span class="label">Pembeli:</span> <span class="value">{pembeli}</span></div>
+        <div class="info-item"><span class="label">Kasir/Staf:</span> <span class="value">{current_user.get("full_name") or current_user.get("username")}</span></div>
+      </div>
+    </div>
+
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th style="width: 45%;">Rincian Koleksi</th>
+          <th class="text-center" style="width: 15%;">Qty</th>
+          <th class="text-right" style="width: 20%;">Harga Satuan</th>
+          <th class="text-right" style="width: 20%;">Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <div class="item-name">{nama_item}</div>
+            <div class="item-meta">Tahun: {tahun} | Denominasi: {denominasi} | SN: {nomor_seri}</div>
+            <div class="item-grade">Grade: {grade_display}</div>
+          </td>
+          <td class="text-center" style="font-weight: 700;">{qty} pcs</td>
+          <td class="text-right">{format_idr(harga_pcs)}</td>
+          <td class="text-right" style="font-weight: 700;">{format_idr(total_jual)}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="summary-section">
+      <div class="notes-box">
+        <strong>Catatan Transaksi:</strong><br>
+        {catatan}
+      </div>
+      <div class="total-box">
+        <div class="total-row">
+          <span>Subtotal:</span>
+          <span>{format_idr(total_jual)}</span>
+        </div>
+        <div class="total-row grand">
+          <span>TOTAL:</span>
+          <span>{format_idr(total_jual)}</span>
+        </div>
+        <div class="paid-badge">LUNAS</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="signatures">
+      <div class="sign-col">
+        <div>Diterima oleh,</div>
+        <div class="sign-line"></div>
+        <div class="sign-name">{pembeli}</div>
+      </div>
+      <div class="sign-col">
+        <div>Hormat Kami,</div>
+        <div class="sign-line"></div>
+        <div class="sign-name">NumisManager Gallery</div>
+      </div>
+    </div>
+
+    <div class="footer-legal">
+      Dokumen ini sah sebagai tanda terima transaksi jual-beli koleksi uang kuno & numismatik resmi NumisManager.
+    </div>
+  </div>
+</div>
+
+<script>
+{auto_print_script}
+</script>
+</body>
+</html>
+"""
+    return HTMLResponse(content=html)
+

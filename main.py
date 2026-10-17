@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from database.db import init_db
-from routers import auth, supplier, batch, koleksi, penjualan, laporan, album
+from routers import auth, supplier, batch, koleksi, penjualan, laporan, album, backup
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -40,6 +40,7 @@ app.include_router(koleksi.router)
 app.include_router(penjualan.router)
 app.include_router(laporan.router)
 app.include_router(album.router)
+app.include_router(backup.router)
 
 # Static files setup
 static_dir = Path(__file__).resolve().parent / "static"

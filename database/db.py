@@ -27,6 +27,10 @@ def init_db():
             conn.execute(sql)
         conn.commit()
 
+        # Run automated schema migrations
+        from database.migration_runner import run_migrations
+        run_migrations(conn)
+
         # Run column migrations for koleksi if needed
         cursor = conn.cursor()
         cursor.execute("PRAGMA table_info(koleksi)")

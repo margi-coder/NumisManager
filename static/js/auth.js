@@ -354,5 +354,79 @@ const Auth = {
     } catch (err) {
       showToast('Gagal menghapus pengguna: ' + err.message, 'error');
     }
+  },
+
+  showChangePasswordModal() {
+    const user = this.currentUser || { username: 'Pengguna' };
+    const body = `
+      <form id="changePasswordForm" onsubmit="event.preventDefault(); Auth.submitChangePassword();">
+        <div style="margin-bottom:14px; background:rgba(212,175,55,0.08); border:1px solid var(--border-gold); padding:12px; border-radius:var(--radius-md);">
+          <div style="font-size:12px; color:var(--text-muted);">Akun Aktif:</div>
+          <div style="font-weight:700; color:var(--gold-light); font-size:14px;">${escapeHtml(user.username)} (${escapeHtml(user.full_name || user.role || 'User')})</div>
+          <div style="font-size:11px; color:var(--text-secondary); margin-top:3px;">
+            Disarankan mengganti kata sandi bawaan demi keamanan database koleksi Anda.
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Kata Sandi Saat Ini <span class="required">*</span></label>
+          <input type="password" id="cpOldPassword" class="form-control" placeholder="Masukkan kata sandi lama Anda" required autocomplete="current-password">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Kata Sandi Baru <span class="required">*</span></label>
+          <input type="password" id="cpNewPassword" class="form-control" placeholder="Minimal 6 karakter" required minlength="6" autocomplete="new-password">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Ulangi Kata Sandi Baru <span class="required">*</span></label>
+          <input type="password" id="cpConfirmPassword" class="form-control" placeholder="Ketik ulang kata sandi baru" required minlength="6" autocomplete="new-password">
+        </div>
+      </form>
+    `;
+
+    const footer = `
+      <button type="button" class="btn btn-secondary" onclick="closeModal()">Batal</button>
+      <button type="button" class="btn btn-primary" onclick="Auth.submitChangePassword()">Simpan Kata Sandi</button>
+    `;
+
+    openModal({
+      title: '🔐 Ubah Kata Sandi Akun',
+      body,
+      footer,
+      size: 'sm'
+    });
+  },
+
+  async submitChangePassword() {
+    const oldPassword = document.getElementById('cpOldPassword')?.value;
+    const newPassword = document.getElementById('cpNewPassword')?.value;
+    const confirmPassword = document.getElementById('cpConfirmPassword')?.value;
+
+    if (!oldPassword || !newPassword) {
+      showToast('Kata sandi lama dan baru wajib diisi.', 'warning');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      showToast('Kata sandi baru minimal 6 karakter.', 'warning');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      showToast('Konfirmasi kata sandi baru tidak cocok.', 'error');
+      return;
+    }
+
+    try {
+      await API.put('/auth/change-password', {
+        old_password: oldPassword,
+        new_password: newPassword
+      });
+      showToast('Kata sandi berhasil diubah! Silakan gunakan kata sandi baru pada login berikutnya.', 'success', 4000);
+      closeModal();
+    } catch (err) {
+      showToast('Gagal mengubah kata sandi: ' + err.message, 'error');
+    }
   }
 };

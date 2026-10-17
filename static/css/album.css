@@ -455,62 +455,56 @@
   display: none !important;
 }
 
-/* Floating Restore Button Trigger (Muncul saat bar navigasi di-hide) */
+/* Floating Restore Button Trigger (Panah Biru ke Bawah tanpa tulisan saat toolbar di-hide) */
 .floating-toolbar-trigger {
   position: absolute;
-  top: 8px;
+  top: 6px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 120;
+  width: 42px;
+  height: 28px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  background: rgba(18, 21, 28, 0.94);
+  justify-content: center;
+  background: rgba(18, 21, 28, 0.92);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(212, 175, 55, 0.55);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7), 0 0 16px rgba(212, 175, 55, 0.25);
-  border-radius: 30px;
-  padding: 7px 20px;
-  color: var(--text-primary);
-  font-size: 0.84rem;
-  font-weight: 600;
+  border: 1px solid rgba(59, 130, 246, 0.55);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7), 0 0 14px rgba(59, 130, 246, 0.3);
+  border-radius: 14px;
+  color: #3b82f6;
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
-  animation: slideDownFloating 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: all 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: slideDownFloating 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
   user-select: none;
 }
 
 .floating-toolbar-trigger:hover {
   background: rgba(26, 30, 40, 0.98);
-  border-color: var(--gold-primary);
-  color: var(--gold-light);
-  transform: translateX(-50%) translateY(2px) scale(1.03);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.8), 0 0 24px rgba(212, 175, 55, 0.4);
+  border-color: #60a5fa;
+  color: #93c5fd;
+  transform: translateX(-50%) translateY(2px) scale(1.08);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.8), 0 0 22px rgba(59, 130, 246, 0.5);
 }
 
-.floating-toolbar-trigger .trigger-icon {
-  font-size: 0.95rem;
+.floating-toolbar-trigger .arrow-blue-icon {
+  width: 20px;
+  height: 20px;
+  stroke: #3b82f6;
+  transition: all 0.2s ease;
 }
 
-.floating-toolbar-trigger .trigger-text {
-  letter-spacing: 0.3px;
-}
-
-.floating-toolbar-trigger .trigger-badge {
-  background: rgba(212, 175, 55, 0.15);
-  border: 1px solid rgba(212, 175, 55, 0.35);
-  padding: 2px 10px;
-  border-radius: 12px;
-  font-size: 0.74rem;
-  color: var(--gold-light);
-  font-weight: 500;
+.floating-toolbar-trigger:hover .arrow-blue-icon {
+  stroke: #93c5fd;
+  transform: translateY(2px);
 }
 
 @keyframes slideDownFloating {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(-14px);
+    transform: translateX(-50%) translateY(-12px);
   }
   to {
     opacity: 1;
@@ -518,18 +512,40 @@
   }
 }
 
+/* Tombol Panah Biru ke Atas di Toolbar (tanpa tulisan) */
 .btn-toggle-toolbar {
-  border-color: rgba(212, 175, 55, 0.35) !important;
-  color: var(--gold-light) !important;
-  background: rgba(212, 175, 55, 0.08) !important;
-  transition: all 0.2s ease !important;
-  font-weight: 500 !important;
+  width: 36px;
+  height: 36px;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: rgba(59, 130, 246, 0.12) !important;
+  border: 1px solid rgba(59, 130, 246, 0.45) !important;
+  border-radius: 8px !important;
+  color: #3b82f6 !important;
+  cursor: pointer !important;
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
 }
 
 .btn-toggle-toolbar:hover {
-  background: rgba(212, 175, 55, 0.2) !important;
-  border-color: var(--gold-primary) !important;
-  transform: translateY(-1px);
+  background: rgba(59, 130, 246, 0.24) !important;
+  border-color: #60a5fa !important;
+  color: #93c5fd !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35) !important;
+}
+
+.btn-toggle-toolbar .arrow-blue-icon {
+  width: 20px;
+  height: 20px;
+  stroke: #3b82f6;
+  transition: all 0.2s ease;
+}
+
+.btn-toggle-toolbar:hover .arrow-blue-icon {
+  stroke: #93c5fd;
+  transform: translateY(-2px);
 }
 
 .album-viewer-toolbar {

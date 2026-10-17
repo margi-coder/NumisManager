@@ -344,16 +344,16 @@ function renderAlbumBookView() {
 
   content.innerHTML = `
     <div class="album-viewer-container ${albumState.viewMode === 'fit' ? 'view-mode-fit' : ''} ${albumState.isToolbarHidden ? 'toolbar-hidden' : ''}">
-      <!-- Floating Button to Restore Toolbar when Hidden -->
+      <!-- Floating Button to Restore Toolbar when Hidden (Panah Biru ke Bawah tanpa tulisan) -->
       <button type="button" 
               id="btnShowAlbumToolbar" 
               class="floating-toolbar-trigger" 
               onclick="toggleAlbumToolbar(true)" 
-              title="Tampilkan Bar Kontrol &amp; Navigasi (atau tekan huruf H)"
+              title="Tampilkan Bar Kontrol (atau tekan huruf H)"
               style="display: ${albumState.isToolbarHidden ? 'inline-flex' : 'none'};">
-        <span class="trigger-icon">🔽</span>
-        <span class="trigger-text">Tampilkan Bar Kontrol</span>
-        <span class="trigger-badge">📖 ${escapeHtml(album.nama_album)}</span>
+        <svg class="arrow-blue-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
       </button>
 
       <!-- Top Navigation Toolbar -->
@@ -407,9 +407,11 @@ function renderAlbumBookView() {
             </button>
           </div>
 
-          <!-- Tombol Sembunyikan Toolbar -->
-          <button type="button" class="btn btn-secondary btn-sm btn-toggle-toolbar" onclick="toggleAlbumToolbar(false)" title="Sembunyikan Bar Menu &amp; Navigasi agar Tampilan Album Lebih Luas (Tekan H)">
-            <span>🔼</span> Sembunyikan Bar
+          <!-- Tombol Sembunyikan Toolbar (Panah Biru ke Atas tanpa tulisan) -->
+          <button type="button" class="btn-toggle-toolbar" onclick="toggleAlbumToolbar(false)" title="Sembunyikan Bar Kontrol (atau tekan huruf H)">
+            <svg class="arrow-blue-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="18 15 12 9 6 15"></polyline>
+            </svg>
           </button>
         </div>
       </div>

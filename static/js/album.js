@@ -21,7 +21,8 @@ let albumState = {
   dragStartX: 0,
   dragDirection: null, // 'next' or 'prev'
   dragProgress: 0,
-  viewMode: localStorage.getItem('numis_album_view_mode') || 'standard'
+  viewMode: localStorage.getItem('numis_album_view_mode') || 'standard',
+  isToolbarHidden: false
 };
 
 // ============================================================================
@@ -103,6 +104,7 @@ function previewSelectedTheme(themeValue) {
 // ----------------------------------------------------------------------------
 async function loadAlbum() {
   document.body.classList.remove('album-fit-active');
+  albumState.isToolbarHidden = false;
   const content = document.getElementById('contentArea');
   content.innerHTML = `
     <div class="empty-state" style="padding: 60px 20px;">
@@ -217,6 +219,7 @@ function renderAlbumShelf() {
 // 3. OPEN & DISPLAY DIGITAL ALBUM BOOK
 // ----------------------------------------------------------------------------
 async function openAlbum(albumId) {
+  albumState.isToolbarHidden = false;
   const content = document.getElementById('contentArea');
   content.innerHTML = `
     <div class="empty-state" style="padding: 60px 20px;">
@@ -332,6 +335,7 @@ function renderAlbumBookView() {
     if (btnNext) btnNext.disabled = (spreadIndex >= totalLembar);
 
     setupDragToFlip();
+    applyAlbumToolbarVisibility();
     if (albumState.viewMode === 'fit' || document.fullscreenElement) {
       updateAlbumFitDimensions();
     }
@@ -339,9 +343,21 @@ function renderAlbumBookView() {
   }
 
   content.innerHTML = `
-    <div class="album-viewer-container ${albumState.viewMode === 'fit' ? 'view-mode-fit' : ''}">
+    <div class="album-viewer-container ${albumState.viewMode === 'fit' ? 'view-mode-fit' : ''} ${albumState.isToolbarHidden ? 'toolbar-hidden' : ''}">
+      <!-- Floating Button to Restore Toolbar when Hidden -->
+      <button type="button" 
+              id="btnShowAlbumToolbar" 
+              class="floating-toolbar-trigger" 
+              onclick="toggleAlbumToolbar(true)" 
+              title="Tampilkan Bar Kontrol &amp; Navigasi (atau tekan huruf H)"
+              style="display: ${albumState.isToolbarHidden ? 'inline-flex' : 'none'};">
+        <span class="trigger-icon">🔽</span>
+        <span class="trigger-text">Tampilkan Bar Kontrol</span>
+        <span class="trigger-badge">📖 ${escapeHtml(album.nama_album)}</span>
+      </button>
+
       <!-- Top Navigation Toolbar -->
-      <div class="album-viewer-toolbar">
+      <div class="album-viewer-toolbar" style="display: ${albumState.isToolbarHidden ? 'none' : 'flex'};">
         <div class="album-toolbar-left">
           <button class="btn btn-secondary btn-sm" onclick="loadAlbum()">
             <span>←</span> Rak Album
@@ -390,6 +406,11 @@ function renderAlbumBookView() {
               <span class="viewsize-btn-icon">⛶</span>
             </button>
           </div>
+
+          <!-- Tombol Sembunyikan Toolbar -->
+          <button type="button" class="btn btn-secondary btn-sm btn-toggle-toolbar" onclick="toggleAlbumToolbar(false)" title="Sembunyikan Bar Menu &amp; Navigasi agar Tampilan Album Lebih Luas (Tekan H)">
+            <span>🔼</span> Sembunyikan Bar
+          </button>
         </div>
       </div>
 
@@ -910,6 +931,45 @@ function applyAlbumViewMode(mode) {
 }
 
 /**
+ * Toggle visibilitas Toolbar Navigasi atas (Hide / Show)
+ * Dapat dipanggil dari tombol toolbar, floating restore trigger, atau shortcut keyboard H
+ */
+function toggleAlbumToolbar(forceShow) {
+  if (typeof forceShow === 'boolean') {
+    albumState.isToolbarHidden = !forceShow;
+  } else {
+    albumState.isToolbarHidden = !albumState.isToolbarHidden;
+  }
+  applyAlbumToolbarVisibility();
+}
+
+/**
+ * Menerapkan status visibilitas toolbar ke elemen DOM
+ */
+function applyAlbumToolbarVisibility() {
+  const container = document.querySelector('.album-viewer-container');
+  const toolbar = document.querySelector('.album-viewer-toolbar');
+  const triggerBtn = document.getElementById('btnShowAlbumToolbar');
+
+  if (!container) return;
+
+  if (albumState.isToolbarHidden) {
+    container.classList.add('toolbar-hidden');
+    if (toolbar) toolbar.style.display = 'none';
+    if (triggerBtn) triggerBtn.style.display = 'inline-flex';
+  } else {
+    container.classList.remove('toolbar-hidden');
+    if (toolbar) toolbar.style.display = 'flex';
+    if (triggerBtn) triggerBtn.style.display = 'none';
+  }
+
+  // Hitung ulang dimensi Pas Layar / Fullscreen bila aktif
+  if (albumState.viewMode === 'fit' || document.fullscreenElement) {
+    updateAlbumFitDimensions();
+  }
+}
+
+/**
  * Menghitung ruang layar yang tersedia secara presisi agar seluruh buku album pas di layar
  */
 function updateAlbumFitDimensions() {
@@ -922,11 +982,13 @@ function updateAlbumFitDimensions() {
   const bottomGap = isFs ? 10 : 14;
   let availHeight;
 
-  if (toolbar) {
+  if (toolbar && !albumState.isToolbarHidden) {
     const toolbarRect = toolbar.getBoundingClientRect();
     availHeight = Math.max(380, window.innerHeight - toolbarRect.bottom - bottomGap);
   } else {
-    availHeight = Math.max(380, window.innerHeight - (isFs ? 80 : 160));
+    // Saat toolbar disembunyikan: gunakan seluruh ruang vertikal
+    const topGap = isFs ? 14 : ((document.querySelector('.top-header')?.offsetHeight || 64) + 14);
+    availHeight = Math.max(380, window.innerHeight - topGap - bottomGap);
   }
   
   // Proporsi binder 2-halaman (aspek rasio sekitar 1.68 - 1.74)
@@ -969,7 +1031,7 @@ async function toggleAlbumFullscreen() {
 // Global window event listeners for smart fit and fullscreen
 if (!window._albumViewEventsBound) {
   window.addEventListener('resize', () => {
-    if (albumState.viewMode === 'fit') {
+    if (albumState.viewMode === 'fit' || document.fullscreenElement) {
       updateAlbumFitDimensions();
     }
   });
@@ -1801,7 +1863,7 @@ function escapeHtml(text) {
     .replace(/'/g, '&#039;');
 }
 
-// Global keyboard navigation: ArrowLeft / ArrowRight to flip pages
+// Global keyboard navigation: ArrowLeft / ArrowRight to flip pages, H to toggle toolbar, F for fullscreen
 document.addEventListener('keydown', (e) => {
   if (albumState.currentAlbum && document.getElementById('bookStageWrapper')) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
@@ -1809,6 +1871,10 @@ document.addEventListener('keydown', (e) => {
       flipSpreadNext();
     } else if (e.key === 'ArrowLeft') {
       flipSpreadPrev();
+    } else if (e.key === 'h' || e.key === 'H') {
+      toggleAlbumToolbar();
+    } else if (e.key === 'f' || e.key === 'F') {
+      toggleAlbumFullscreen();
     }
   }
 });

@@ -278,6 +278,66 @@ function renderAlbumBookView() {
     spreadTitle = `Halaman ${spreadIndex * 2} (Lembar ${spreadIndex} REV) • Halaman ${(spreadIndex * 2) + 1} (Lembar ${spreadIndex + 1} OBS)`;
   }
 
+  // JIKA BINDER SUDAH ADA DI DOM: Lakukan in-place update (mencegah flickering, jump size, dan browser keluar fullscreen)
+  const existingBinder = document.getElementById('binderBookElement');
+  const leftSlot = document.getElementById('albumLeftSlot');
+  const rightSlot = document.getElementById('albumRightSlot');
+
+  if (existingBinder && leftSlot && rightSlot) {
+    existingBinder.className = `album-binder-book ${themeClass}`;
+    leftSlot.innerHTML = leftPanelHtml;
+    rightSlot.innerHTML = rightPanelHtml;
+
+    // Reset turn layer
+    const turnLayer = document.getElementById('interactiveTurnLayer');
+    if (turnLayer) {
+      turnLayer.style.display = 'none';
+      turnLayer.className = 'interactive-turn-layer';
+      turnLayer.style.transform = '';
+      turnLayer.style.transition = 'none';
+    }
+    const shadow = document.getElementById('turnShadowOverlay');
+    if (shadow) shadow.style.opacity = '0';
+
+    // Update grab cues
+    existingBinder.querySelectorAll('.page-edge-grab-cue').forEach(el => el.remove());
+    if (spreadIndex > 0) {
+      const cueLeft = document.createElement('div');
+      cueLeft.className = 'page-edge-grab-cue grab-cue-left';
+      cueLeft.onclick = flipSpreadPrev;
+      cueLeft.title = 'Tarik / Klik untuk membalik ke kiri';
+      cueLeft.innerHTML = '❮';
+      existingBinder.appendChild(cueLeft);
+    }
+    if (spreadIndex < totalLembar) {
+      const cueRight = document.createElement('div');
+      cueRight.className = 'page-edge-grab-cue grab-cue-right';
+      cueRight.onclick = flipSpreadNext;
+      cueRight.title = 'Tarik / Klik untuk membalik ke kanan';
+      cueRight.innerHTML = '❯';
+      existingBinder.appendChild(cueRight);
+    }
+
+    // Update page indicator pill
+    const pageIndicator = document.querySelector('.page-indicator-pill');
+    if (pageIndicator) {
+      const label = spreadIndex === 0 ? 'Sampul & Hal 1' : spreadIndex >= totalLembar ? `Hal ${totalLembar*2} & Akhir` : `Hal ${spreadIndex*2} & ${(spreadIndex*2)+1}`;
+      pageIndicator.innerHTML = `<span>${label}</span><span style="opacity: 0.6;">(${spreadIndex}/${totalLembar} Lembar)</span>`;
+    }
+
+    const btnPrev = document.querySelector('button[title*="Balik Lembar ke Sebelumnya"]');
+    if (btnPrev) btnPrev.disabled = (spreadIndex === 0);
+
+    const btnNext = document.querySelector('button[title*="Balik Lembar ke Berikutnya"]');
+    if (btnNext) btnNext.disabled = (spreadIndex >= totalLembar);
+
+    setupDragToFlip();
+    if (albumState.viewMode === 'fit' || document.fullscreenElement) {
+      updateAlbumFitDimensions();
+    }
+    return;
+  }
+
   content.innerHTML = `
     <div class="album-viewer-container ${albumState.viewMode === 'fit' ? 'view-mode-fit' : ''}">
       <!-- Top Navigation Toolbar -->
@@ -343,8 +403,10 @@ function renderAlbumBookView() {
         </div>
 
         <div class="album-binder-book ${themeClass}" id="binderBookElement">
-          <!-- PANEL KIRI (COVER KOSONG ATAU SISI BELAKANG LEMBAR) -->
-          ${leftPanelHtml}
+          <!-- SLOT PANEL KIRI -->
+          <div id="albumLeftSlot" class="album-page-slot">
+            ${leftPanelHtml}
+          </div>
 
           <!-- BINDER SPINE & 4 METALLIC RINGS -->
           <div class="binder-spine">
@@ -366,8 +428,10 @@ function renderAlbumBookView() {
             </div>
           </div>
 
-          <!-- PANEL KANAN (SISI DEPAN LEMBAR ATAU COVER BELAKANG KOSONG) -->
-          ${rightPanelHtml}
+          <!-- SLOT PANEL KANAN -->
+          <div id="albumRightSlot" class="album-page-slot">
+            ${rightPanelHtml}
+          </div>
 
           <!-- Visual edge peel cues for drag interaction -->
           ${spreadIndex > 0 ? `<div class="page-edge-grab-cue grab-cue-left" onclick="flipSpreadPrev()" title="Tarik / Klik untuk membalik ke kiri">❮</div>` : ''}
@@ -578,8 +642,8 @@ function setupDragToFlip() {
     const clickX = e.clientX - rect.left;
     halfWidth = rect.width / 2;
 
-    const rightPage = document.getElementById('rightPagePanel');
-    const leftPage = document.getElementById('leftPagePanel');
+    const rightSlot = document.getElementById('albumRightSlot');
+    const leftSlot = document.getElementById('albumLeftSlot');
 
     if (clickX > halfWidth && albumState.spreadIndex < albumState.lembaran.length) {
       // Membuka halaman kanan -> drag ke kiri (buka lembar dari kanan ke kiri, jatuh di sebelah kiri)
@@ -588,8 +652,8 @@ function setupDragToFlip() {
       activeDirection = 'next';
 
       // 1. Salin konten halaman kanan ke muka depan lembar putar
-      if (rightPage) {
-        turnFront.innerHTML = rightPage.innerHTML;
+      if (rightSlot) {
+        turnFront.innerHTML = rightSlot.innerHTML;
       }
 
       // 2. Siapkan muka belakang lembar (sisi REV dari lembar yang sedang dibalik)
@@ -600,15 +664,12 @@ function setupDragToFlip() {
 
       // 3. Pre-render halaman bawah di sisi kanan (lembar berikutnya atau sampul belakang)
       const nextSheet = albumState.lembaran[albumState.spreadIndex + 1];
-      if (rightPage) {
-        if (nextSheet) {
-          rightPage.outerHTML = renderSheetPanel(nextSheet, 'OBS', (albumState.spreadIndex + 1) * 2 + 1);
-        } else {
-          rightPage.outerHTML = renderInsideBackCover(albumState.currentAlbum);
-        }
+      if (rightSlot) {
+        rightSlot.innerHTML = nextSheet ? renderSheetPanel(nextSheet, 'OBS', (albumState.spreadIndex + 1) * 2 + 1) : renderInsideBackCover(albumState.currentAlbum);
       }
 
       turnLayer.className = 'interactive-turn-layer turning-forward';
+      turnLayer.style.display = 'block';
       turnLayer.style.transition = 'none';
       turnLayer.style.transform = 'rotateY(0deg)';
       if (shadow) shadow.style.opacity = '0';
@@ -621,8 +682,8 @@ function setupDragToFlip() {
       activeDirection = 'prev';
 
       // 1. Salin konten halaman kiri ke muka depan lembar putar
-      if (leftPage) {
-        turnFront.innerHTML = leftPage.innerHTML;
+      if (leftSlot) {
+        turnFront.innerHTML = leftSlot.innerHTML;
       }
 
       // 2. Siapkan muka belakang lembar (sisi OBS dari lembar yang dibalik kembali)
@@ -633,15 +694,12 @@ function setupDragToFlip() {
 
       // 3. Pre-render halaman bawah di sisi kiri (lembar sebelumnya atau sampul depan)
       const underSheet = albumState.spreadIndex > 1 ? albumState.lembaran[albumState.spreadIndex - 2] : null;
-      if (leftPage) {
-        if (underSheet) {
-          leftPage.outerHTML = renderSheetPanel(underSheet, 'REV', (albumState.spreadIndex - 1) * 2);
-        } else {
-          leftPage.outerHTML = renderInsideFrontCover(albumState.currentAlbum);
-        }
+      if (leftSlot) {
+        leftSlot.innerHTML = underSheet ? renderSheetPanel(underSheet, 'REV', (albumState.spreadIndex - 1) * 2) : renderInsideFrontCover(albumState.currentAlbum);
       }
 
       turnLayer.className = 'interactive-turn-layer turning-backward';
+      turnLayer.style.display = 'block';
       turnLayer.style.transition = 'none';
       turnLayer.style.transform = 'rotateY(0deg)';
       if (shadow) shadow.style.opacity = '0';
@@ -734,10 +792,10 @@ function flipSpreadNext() {
   const turnLayer = document.getElementById('interactiveTurnLayer');
   const turnFront = document.getElementById('turnFaceFront');
   const turnBack = document.getElementById('turnFaceBack');
-  const rightPage = document.getElementById('rightPagePanel');
+  const rightSlot = document.getElementById('albumRightSlot');
 
-  if (turnLayer && rightPage) {
-    turnFront.innerHTML = rightPage.innerHTML;
+  if (turnLayer && rightSlot) {
+    turnFront.innerHTML = rightSlot.innerHTML;
     const turningSheet = albumState.lembaran[albumState.spreadIndex];
     if (turningSheet) {
       turnBack.innerHTML = renderSheetPanel(turningSheet, 'REV', (albumState.spreadIndex + 1) * 2);
@@ -745,25 +803,22 @@ function flipSpreadNext() {
 
     // Pre-render lembar berikutnya di halaman kanan
     const nextSheet = albumState.lembaran[albumState.spreadIndex + 1];
-    if (nextSheet) {
-      rightPage.outerHTML = renderSheetPanel(nextSheet, 'OBS', (albumState.spreadIndex + 1) * 2 + 1);
-    } else {
-      rightPage.outerHTML = renderInsideBackCover(albumState.currentAlbum);
-    }
+    rightSlot.innerHTML = nextSheet ? renderSheetPanel(nextSheet, 'OBS', (albumState.spreadIndex + 1) * 2 + 1) : renderInsideBackCover(albumState.currentAlbum);
 
     turnLayer.className = 'interactive-turn-layer turning-forward';
+    turnLayer.style.display = 'block';
     turnLayer.style.transition = 'none';
     turnLayer.style.transform = 'rotateY(0deg)';
     void turnLayer.offsetHeight; // force reflow
 
     // Buka lembar dari kanan ke kiri hingga jatuh di halaman kiri (-180deg)
-    turnLayer.style.transition = 'transform 0.48s cubic-bezier(0.25, 1, 0.5, 1)';
+    turnLayer.style.transition = 'transform 0.44s cubic-bezier(0.25, 1, 0.5, 1)';
     turnLayer.style.transform = 'rotateY(-180deg)';
 
     setTimeout(() => {
       albumState.spreadIndex += 1;
       renderAlbumBookView();
-    }, 450);
+    }, 420);
   } else {
     albumState.spreadIndex += 1;
     renderAlbumBookView();
@@ -775,10 +830,10 @@ function flipSpreadPrev() {
   const turnLayer = document.getElementById('interactiveTurnLayer');
   const turnFront = document.getElementById('turnFaceFront');
   const turnBack = document.getElementById('turnFaceBack');
-  const leftPage = document.getElementById('leftPagePanel');
+  const leftSlot = document.getElementById('albumLeftSlot');
 
-  if (turnLayer && leftPage) {
-    turnFront.innerHTML = leftPage.innerHTML;
+  if (turnLayer && leftSlot) {
+    turnFront.innerHTML = leftSlot.innerHTML;
     const prevSheet = albumState.lembaran[albumState.spreadIndex - 1];
     if (prevSheet) {
       turnBack.innerHTML = renderSheetPanel(prevSheet, 'OBS', (albumState.spreadIndex * 2) - 1);
@@ -786,25 +841,22 @@ function flipSpreadPrev() {
 
     // Pre-render lembar sebelumnya di halaman kiri
     const underSheet = albumState.spreadIndex > 1 ? albumState.lembaran[albumState.spreadIndex - 2] : null;
-    if (underSheet) {
-      leftPage.outerHTML = renderSheetPanel(underSheet, 'REV', (albumState.spreadIndex - 1) * 2);
-    } else {
-      leftPage.outerHTML = renderInsideFrontCover(albumState.currentAlbum);
-    }
+    leftSlot.innerHTML = underSheet ? renderSheetPanel(underSheet, 'REV', (albumState.spreadIndex - 1) * 2) : renderInsideFrontCover(albumState.currentAlbum);
 
     turnLayer.className = 'interactive-turn-layer turning-backward';
+    turnLayer.style.display = 'block';
     turnLayer.style.transition = 'none';
     turnLayer.style.transform = 'rotateY(0deg)';
     void turnLayer.offsetHeight; // force reflow
 
     // Buka lembar dari kiri ke kanan hingga jatuh di halaman kanan (+180deg)
-    turnLayer.style.transition = 'transform 0.48s cubic-bezier(0.25, 1, 0.5, 1)';
+    turnLayer.style.transition = 'transform 0.44s cubic-bezier(0.25, 1, 0.5, 1)';
     turnLayer.style.transform = 'rotateY(180deg)';
 
     setTimeout(() => {
       albumState.spreadIndex -= 1;
       renderAlbumBookView();
-    }, 450);
+    }, 420);
   } else {
     albumState.spreadIndex -= 1;
     renderAlbumBookView();
@@ -861,18 +913,25 @@ function applyAlbumViewMode(mode) {
  * Menghitung ruang layar yang tersedia secara presisi agar seluruh buku album pas di layar
  */
 function updateAlbumFitDimensions() {
-  if (albumState.viewMode !== 'fit') return;
+  const isFs = document.fullscreenElement !== null;
+  if (albumState.viewMode !== 'fit' && !isFs) return;
   const wrapper = document.getElementById('bookStageWrapper');
   const toolbar = document.querySelector('.album-viewer-toolbar');
-  if (!wrapper || !toolbar) return;
+  if (!wrapper) return;
 
-  const toolbarRect = toolbar.getBoundingClientRect();
-  const bottomGap = 16;
-  const availHeight = Math.max(380, window.innerHeight - toolbarRect.bottom - bottomGap);
+  const bottomGap = isFs ? 10 : 14;
+  let availHeight;
+
+  if (toolbar) {
+    const toolbarRect = toolbar.getBoundingClientRect();
+    availHeight = Math.max(380, window.innerHeight - toolbarRect.bottom - bottomGap);
+  } else {
+    availHeight = Math.max(380, window.innerHeight - (isFs ? 80 : 160));
+  }
   
   // Proporsi binder 2-halaman (aspek rasio sekitar 1.68 - 1.74)
   const contentArea = document.getElementById('contentArea');
-  const availWidth = Math.min(1450, (contentArea ? contentArea.clientWidth : window.innerWidth) - 20);
+  const availWidth = Math.min(1500, (contentArea ? contentArea.clientWidth : window.innerWidth) - 20);
   const maxW = Math.min(availWidth, availHeight * 1.72);
 
   wrapper.style.height = `${availHeight}px`;
@@ -885,8 +944,8 @@ function updateAlbumFitDimensions() {
  */
 async function toggleAlbumFullscreen() {
   try {
-    const container = document.querySelector('.album-viewer-container') || document.documentElement;
     if (!document.fullscreenElement) {
+      const container = document.documentElement;
       if (container.requestFullscreen) {
         await container.requestFullscreen();
       } else if (container.webkitRequestFullscreen) {
@@ -897,6 +956,8 @@ async function toggleAlbumFullscreen() {
     } else {
       if (document.exitFullscreen) {
         await document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        await document.webkitExitFullscreen();
       }
     }
   } catch (err) {

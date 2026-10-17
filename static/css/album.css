@@ -1543,33 +1543,77 @@
 }
 
 /* SMART AUTO-FIT LAYOUT ADJUSTMENTS */
+body.album-fit-active,
 body.album-fit-active .content-area {
-  padding-top: 10px;
-  padding-bottom: 10px;
-  overflow: hidden;
+  overflow: hidden !important;
+}
+
+body.album-fit-active .content-area {
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
 }
 
 .album-viewer-container.view-mode-fit {
   margin-bottom: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  height: calc(100vh - 84px);
+  max-height: calc(100vh - 84px);
 }
 
 .album-viewer-container.view-mode-fit .album-viewer-toolbar {
   padding: 8px 16px;
   margin-bottom: 8px;
+  flex-shrink: 0;
 }
 
 .album-viewer-container.view-mode-fit .album-book-wrapper {
-  transition: height 0.2s ease, max-width 0.2s ease;
-  min-height: 380px;
+  flex: 1;
+  min-height: 0 !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  max-width: min(1450px, calc((100vh - 165px) * 1.72)) !important;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  transition: none !important; /* Mencegah album membesar/melompat saat membalik halaman */
 }
 
 .album-viewer-container.view-mode-fit .album-binder-book {
   min-height: 0 !important;
   height: 100% !important;
+  max-height: 100% !important;
   padding: 10px 14px;
   box-sizing: border-box;
+  flex: 1;
+  overflow: hidden;
+}
+
+.album-page-slot {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.album-page-slot > * {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.turn-page-face .album-page {
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
 }
 
 .album-viewer-container.view-mode-fit .interactive-turn-layer {
@@ -1595,6 +1639,9 @@ body.album-fit-active .content-area {
 
 .album-viewer-container.view-mode-fit .album-page {
   padding: 8px 10px;
+  min-height: 0 !important;
+  height: 100% !important;
+  box-sizing: border-box;
 }
 
 .album-viewer-container.view-mode-fit .album-page-header {
@@ -1622,10 +1669,29 @@ body.album-fit-active .content-area {
 
 .album-viewer-container.view-mode-fit .album-pockets-container {
   gap: 6px;
+  min-height: 0 !important;
+  height: calc(100% - 32px);
 }
 
 .album-viewer-container.view-mode-fit .refill-pocket {
   padding: 4px;
+  min-height: 0 !important;
+  overflow: hidden;
+}
+
+.album-viewer-container.view-mode-fit .banknote-slot-content {
+  min-height: 0 !important;
+}
+
+.album-viewer-container.view-mode-fit .banknote-display-stage {
+  min-height: 0 !important;
+  flex: 1;
+}
+
+.album-viewer-container.view-mode-fit .banknote-photo {
+  max-width: 95%;
+  max-height: 92%;
+  object-fit: contain;
 }
 
 .album-viewer-container.view-mode-fit .banknote-label-strip {
@@ -1659,19 +1725,64 @@ body.album-fit-active .content-area {
 }
 
 /* FULLSCREEN PRESENTATION STYLING */
-.album-viewer-container:fullscreen {
-  width: 100vw;
-  height: 100vh;
-  padding: 12px 20px;
-  background: var(--bg-base);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-sizing: border-box;
+:fullscreen .sidebar,
+:-webkit-full-screen .sidebar {
+  display: none !important;
 }
 
-.album-viewer-container:fullscreen .album-binder-book {
+:fullscreen .top-header,
+:-webkit-full-screen .top-header {
+  display: none !important;
+}
+
+:fullscreen .main-wrapper,
+:-webkit-full-screen .main-wrapper {
+  margin-left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
+}
+
+:fullscreen .content-area,
+:-webkit-full-screen .content-area {
+  padding: 8px 16px !important;
+  max-width: 100% !important;
+  height: 100vh !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+:fullscreen .album-viewer-container,
+:-webkit-full-screen .album-viewer-container {
+  height: calc(100vh - 16px) !important;
+  max-height: calc(100vh - 16px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  margin-bottom: 0 !important;
+}
+
+:fullscreen .album-viewer-toolbar,
+:-webkit-full-screen .album-viewer-toolbar {
+  padding: 8px 16px !important;
+  margin-bottom: 8px !important;
+  flex-shrink: 0 !important;
+}
+
+:fullscreen .album-book-wrapper,
+:-webkit-full-screen .album-book-wrapper {
+  flex: 1 !important;
+  height: calc(100vh - 90px) !important;
+  max-height: calc(100vh - 90px) !important;
+  max-width: min(1550px, calc((100vh - 90px) * 1.72)) !important;
+  transition: none !important;
+}
+
+:fullscreen .album-binder-book,
+:-webkit-full-screen .album-binder-book {
   min-height: 0 !important;
   height: 100% !important;
+  max-height: 100% !important;
+  padding: 10px 16px !important;
 }
 

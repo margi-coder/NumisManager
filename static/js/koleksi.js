@@ -354,10 +354,10 @@ function renderKoleksiTable(data, total, page) {
         <td style="text-align:center;">${statusIconBadge}</td>
         <td>
           <div class="td-actions" style="justify-content:center;">
-            <button class="btn btn-secondary btn-icon" title="Lihat Detail Item" onclick="showViewItemModal(${item.id})">👁️</button>
+            <button class="btn btn-secondary btn-icon" title="Lihat Rincian &amp; Galeri Foto Lengkap" onclick="showViewItemModal(${item.id})">👁️</button>
             <button class="btn btn-secondary btn-icon" title="Edit Koleksi" onclick="showEditKoleksiModal(${item.id})">✏️</button>
             <button class="btn btn-secondary btn-icon" title="Cetak Label Holder (2x2 inci)" onclick="printHolderLabel(${item.id})">🏷️</button>
-            <button class="btn btn-secondary btn-icon" title="Unggah Foto (Obv/Rev)" onclick="showUploadFotoModal(${item.id}, '${escapeHtml(item.nama_item)}')">📸</button>
+            <button class="btn btn-secondary btn-icon" title="Kelola Foto &amp; Galeri Multi-Foto (OBV/REV, Watermark, Slab, dll.)" onclick="showUploadFotoModal(${item.id}, '${escapeHtml(item.nama_item)}')">📸</button>
             <button class="btn btn-secondary btn-icon" title="Pecah Stok Jadi Item Baru" onclick="showPecahStokModal(${item.id}, ${qtyTersisa})" ${isHabis ? 'disabled' : ''}>✂️</button>
             <button class="btn btn-success btn-icon" title="Quick Sale / Jual Item" onclick="showQuickSaleModal(${item.id})" ${isHabis ? 'disabled' : ''}>💰</button>
             <button class="btn btn-danger btn-icon" title="Hapus Koleksi" onclick="deleteKoleksi(${item.id}, '${escapeHtml(item.nama_item)}')">🗑️</button>
@@ -493,26 +493,45 @@ async function showViewItemModal(id) {
           </div>
         </div>
 
-        ${Array.isArray(item.gallery_fotos) && item.gallery_fotos.length > 0 ? `
-          <!-- Multi-Photo Gallery Preview Strip -->
-          <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 14px;">
-            <div style="font-size: 11.5px; font-weight: 700; color: var(--gold-light); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">
-              📸 Galeri Foto Khusus (Watermark, Slab, &amp; Detail):
+        <!-- Multi-Photo Gallery Preview Strip -->
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <div style="font-size: 11.5px; font-weight: 700; color: var(--gold-light); text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px;">
+              <span>📸 Galeri Multi-Foto (Watermark, Slab, &amp; Detail)</span>
+              <span class="badge" style="background: rgba(212,175,55,0.15); color: var(--gold-light); font-size: 10.5px; padding: 2px 7px;">
+                ${(item.gallery_fotos || []).length} Foto
+              </span>
             </div>
+            <button class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 10px;" onclick="closeModal(); showUploadFotoModal(${item.id}, '${escapeHtml(item.nama_item)}')">
+              ⚙️ Kelola / Tambah Foto Galeri
+            </button>
+          </div>
+
+          ${Array.isArray(item.gallery_fotos) && item.gallery_fotos.length > 0 ? `
             <div style="display: flex; gap: 12px; flex-wrap: wrap;">
               ${item.gallery_fotos.map(gf => `
-                <div style="text-align: center; width: 100px;">
-                  <div style="width: 100px; height: 70px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border-gold); background: #000; display: flex; align-items: center; justify-content: center;">
+                <div style="text-align: center; width: 105px;">
+                  <div style="width: 105px; height: 75px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border-gold); background: #000; display: flex; align-items: center; justify-content: center;">
                     <img src="${escapeHtml(gf.foto_path)}" style="max-width: 100%; max-height: 100%; object-fit: cover; cursor: zoom-in;" onclick="openGlobalLightbox('${escapeHtml(gf.foto_path)}', '${escapeHtml(item.nama_item + ' - ' + (gf.label || 'Detail'))}')" title="Klik untuk memperbesar">
                   </div>
-                  <div style="font-size: 10.5px; color: var(--text-secondary); margin-top: 4px; text-transform: capitalize; font-weight: 600;">
+                  <div style="font-size: 10.5px; color: var(--gold-light); margin-top: 4px; text-transform: capitalize; font-weight: 700;">
                     ${escapeHtml(gf.label || 'detail')}
                   </div>
+                  ${gf.catatan ? `<div style="font-size: 9.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(gf.catatan)}</div>` : ''}
                 </div>
               `).join('')}
             </div>
-          </div>
-        ` : ''}
+          ` : `
+            <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.25); padding: 12px 14px; border-radius: 6px; border: 1px dashed var(--border);">
+              <div style="font-size: 12px; color: var(--text-muted);">
+                Belum ada foto galeri pendukung (tanda air/watermark, segel grading slab, benang pengaman, atau variasi cetak).
+              </div>
+              <button class="btn btn-primary btn-sm" style="font-size: 11px;" onclick="closeModal(); showUploadFotoModal(${item.id}, '${escapeHtml(item.nama_item)}')">
+                + Tambah Foto Sekarang
+              </button>
+            </div>
+          `}
+        </div>
 
         <!-- Specifications & Stock Grid -->
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap:12px; background:rgba(255,255,255,0.02); padding:16px; border-radius:10px; border:1px solid var(--border);">
@@ -792,54 +811,276 @@ async function submitUpdateKoleksi(id) {
  */
 let uploadObvFileHolder = null;
 let uploadRevFileHolder = null;
+let uploadGalleryFileHolder = null;
+let currentUploadModalKoleksiId = null;
 
-function showUploadFotoModal(id, namaItem) {
+async function showUploadFotoModal(id, namaItem, activeTab = 'tab-gallery') {
+  currentUploadModalKoleksiId = id;
   uploadObvFileHolder = null;
   uploadRevFileHolder = null;
+  uploadGalleryFileHolder = null;
 
-  const body = `
-    <div style="margin-bottom:14px; color:var(--text-secondary); font-size:13px;">
-      Unggah foto tampak depan (Obverse) dan tampak belakang (Reverse) item numismatik Anda:
-    </div>
+  try {
+    const [item, gallery] = await Promise.all([
+      API.get(`/koleksi/${id}`),
+      API.get(`/koleksi/${id}/gallery`)
+    ]);
 
-    <div class="dual-photo-grid">
-      <!-- Obverse Card -->
-      <div class="photo-box-card" id="modalObvZone" onclick="document.getElementById('modalObvInput').click()">
-        <input type="file" id="modalObvInput" accept="image/*" style="display:none" onchange="handleModalObvSelect(event)">
-        <div id="modalObvPrompt">
-          <div style="font-size:32px; margin-bottom:4px;">🪙</div>
-          <div style="font-weight:600; font-size:13px; color:var(--text-primary);">Tampak Depan (OBV)</div>
-          <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Klik untuk pilih foto</div>
+    const fotoObv = item.foto_obv || item.foto_path || item.foto_url || item.foto;
+    const fotoRev = item.foto_rev;
+    const galleryItems = Array.isArray(gallery) ? gallery : [];
+
+    const body = `
+      <div style="margin-bottom:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(212,175,55,0.08); border:1px solid var(--border-gold); padding:10px 14px; border-radius:8px; margin-bottom:14px;">
+          <div>
+            <div style="font-size:11px; color:var(--text-muted);">Item Koleksi:</div>
+            <div style="font-weight:700; color:var(--gold-light); font-size:14px;">${escapeHtml(item.nama_item)}</div>
+            <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">SN: ${escapeHtml(item.nomor_seri || '-')} • Grade: ${escapeHtml(item.grade || '-')}</div>
+          </div>
+          <div style="text-align:right;">
+            <span class="badge" style="background:rgba(212,175,55,0.15); color:var(--gold-light); font-size:11px; border:1px solid var(--border-gold);">
+              ${galleryItems.length} Foto Galeri Tersimpan
+            </span>
+          </div>
         </div>
-        <img id="modalObvPreview" class="photo-box-preview" style="display:none;" alt="Preview Obverse">
-        <div class="photo-box-label">📸 Obverse (Muka)</div>
-      </div>
 
-      <!-- Reverse Card -->
-      <div class="photo-box-card" id="modalRevZone" onclick="document.getElementById('modalRevInput').click()">
-        <input type="file" id="modalRevInput" accept="image/*" style="display:none" onchange="handleModalRevSelect(event)">
-        <div id="modalRevPrompt">
-          <div style="font-size:32px; margin-bottom:4px;">🪙</div>
-          <div style="font-weight:600; font-size:13px; color:var(--text-primary);">Tampak Belakang (REV)</div>
-          <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Klik untuk pilih foto</div>
+        <!-- Tab Switcher -->
+        <div style="display:flex; gap:8px; border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:16px;">
+          <button type="button" class="btn btn-sm ${activeTab === 'tab-main' ? 'btn-primary' : 'btn-secondary'}" id="btnTabMainPhotos" onclick="switchUploadPhotoTab('tab-main')">
+            🪙 Foto Utama (OBV &amp; REV)
+          </button>
+          <button type="button" class="btn btn-sm ${activeTab === 'tab-gallery' ? 'btn-primary' : 'btn-secondary'}" id="btnTabGalleryPhotos" onclick="switchUploadPhotoTab('tab-gallery')">
+            📸 Galeri Multi-Foto (${galleryItems.length})
+          </button>
         </div>
-        <img id="modalRevPreview" class="photo-box-preview" style="display:none;" alt="Preview Reverse">
-        <div class="photo-box-label">📸 Reverse (Belakang)</div>
+
+        <!-- TAB 1: Foto Utama (OBV & REV) -->
+        <div id="sectionTabMain" style="display:${activeTab === 'tab-main' ? 'block' : 'none'};">
+          <div style="font-size:12px; color:var(--text-secondary); margin-bottom:12px;">
+            Unggah atau perbarui foto tampak depan (Obverse) dan tampak belakang (Reverse):
+          </div>
+
+          <div class="dual-photo-grid">
+            <!-- Obverse Card -->
+            <div class="photo-box-card ${fotoObv ? 'has-image' : ''}" id="modalObvZone" onclick="document.getElementById('modalObvInput').click()">
+              <input type="file" id="modalObvInput" accept="image/*" style="display:none" onchange="handleModalObvSelect(event)">
+              <div id="modalObvPrompt" style="${fotoObv ? 'display:none;' : ''}">
+                <div style="font-size:32px; margin-bottom:4px;">🪙</div>
+                <div style="font-weight:600; font-size:13px; color:var(--text-primary);">Tampak Depan (OBV)</div>
+                <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Klik untuk pilih foto baru</div>
+              </div>
+              <img id="modalObvPreview" class="photo-box-preview" src="${fotoObv ? escapeHtml(fotoObv) : ''}" style="${fotoObv ? 'display:block;' : 'display:none;'}" alt="Preview Obverse">
+              <div class="photo-box-label">📸 Obverse (Muka)</div>
+            </div>
+
+            <!-- Reverse Card -->
+            <div class="photo-box-card ${fotoRev ? 'has-image' : ''}" id="modalRevZone" onclick="document.getElementById('modalRevInput').click()">
+              <input type="file" id="modalRevInput" accept="image/*" style="display:none" onchange="handleModalRevSelect(event)">
+              <div id="modalRevPrompt" style="${fotoRev ? 'display:none;' : ''}">
+                <div style="font-size:32px; margin-bottom:4px;">🪙</div>
+                <div style="font-weight:600; font-size:13px; color:var(--text-primary);">Tampak Belakang (REV)</div>
+                <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Klik untuk pilih foto baru</div>
+              </div>
+              <img id="modalRevPreview" class="photo-box-preview" src="${fotoRev ? escapeHtml(fotoRev) : ''}" style="${fotoRev ? 'display:block;' : 'display:none;'}" alt="Preview Reverse">
+              <div class="photo-box-label">📸 Reverse (Belakang)</div>
+            </div>
+          </div>
+
+          <div style="margin-top:16px; text-align:right;">
+            <button type="button" class="btn btn-primary" onclick="submitUploadFoto(${id})">
+              💾 Simpan Foto Utama (OBV/REV)
+            </button>
+          </div>
+        </div>
+
+        <!-- TAB 2: Galeri Multi-Foto (Watermark, Slab, Detail, dll.) -->
+        <div id="sectionTabGallery" style="display:${activeTab === 'tab-gallery' ? 'block' : 'none'};">
+          <!-- Form Upload Foto Galeri Baru -->
+          <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-gold); border-radius:8px; padding:14px; margin-bottom:18px;">
+            <div style="font-size:13px; font-weight:700; color:var(--gold-light); margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+              <span>+ Tambah Foto Dokumentasi ke Galeri (Multi-Photo)</span>
+            </div>
+            
+            <form id="addGalleryPhotoForm" onsubmit="event.preventDefault(); submitUploadGalleryPhoto(${id}, '${escapeHtml(namaItem)}');">
+              <div class="data-grid-3">
+                <div class="form-group" style="margin-bottom:0;">
+                  <label class="form-label" style="font-size:11px;">Pilih Berkas Foto <span class="required">*</span></label>
+                  <input type="file" id="galFileInput" class="form-control" accept="image/*" required onchange="handleGalleryFileSelect(event)">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                  <label class="form-label" style="font-size:11px;">Label / Kategori Foto <span class="required">*</span></label>
+                  <select id="galLabelSelect" class="form-select" required>
+                    <option value="watermark">💧 Tanda Air (Watermark)</option>
+                    <option value="slab">🏛️ Slab / Segel Grading PMG/PCGS</option>
+                    <option value="benang_pengaman">🧵 Benang Pengaman / Security Thread</option>
+                    <option value="detail" selected>🔍 Detail Fitur &amp; Cetakan</option>
+                    <option value="cacat_variasi">⚠️ Cacat Cetak / Variasi Error</option>
+                    <option value="sertifikat">📄 Sertifikat / Faktur Keaslian</option>
+                    <option value="lainnya">📸 Dokumentasi Tambahan Lainnya</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                  <label class="form-label" style="font-size:11px;">Keterangan / Catatan Foto</label>
+                  <input type="text" id="galCatatanInput" class="form-control" placeholder="cth: Tampak serat fluoresensi di bawah UV">
+                </div>
+              </div>
+
+              <!-- Live File Preview Box -->
+              <div id="galPreviewContainer" style="display:none; margin-top:10px; align-items:center; gap:12px; background:rgba(0,0,0,0.3); padding:8px 12px; border-radius:6px; border:1px solid var(--border);">
+                <img id="galPreviewImg" style="width:55px; height:42px; object-fit:cover; border-radius:4px; border:1px solid var(--border-gold);">
+                <div>
+                  <div style="font-size:11.5px; font-weight:600; color:var(--text-primary);" id="galPreviewFilename"></div>
+                  <div style="font-size:10.5px; color:var(--text-muted);" id="galPreviewFilesize"></div>
+                </div>
+              </div>
+
+              <div style="margin-top:12px; text-align:right;">
+                <button type="submit" class="btn btn-primary btn-sm" id="btnSubmitGallery">
+                  ⬆️ Unggah Foto ke Galeri
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Existing Gallery Photos Grid -->
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <div style="font-size:13px; font-weight:700; color:var(--text-primary);">
+                Daftar Foto Galeri Koleksi Ini (${galleryItems.length})
+              </div>
+              <div style="font-size:11px; color:var(--text-muted);">
+                Klik gambar untuk memperbesar resolusi penuh (Lightbox)
+              </div>
+            </div>
+
+            ${galleryItems.length === 0 ? `
+              <div style="text-align:center; padding:28px 16px; background:rgba(255,255,255,0.015); border:1px dashed var(--border); border-radius:8px; color:var(--text-muted); font-size:12px;">
+                <div style="font-size:24px; margin-bottom:6px;">📸</div>
+                Belum ada foto dokumentasi tambahan untuk item ini.<br>
+                Gunakan form di atas untuk mengunggah foto watermark, holder slab grading, atau detail koin.
+              </div>
+            ` : `
+              <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:12px;">
+                ${galleryItems.map(gf => `
+                  <div style="background:rgba(18,21,28,0.95); border:1px solid var(--border); border-radius:8px; padding:8px; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
+                    <div>
+                      <div style="width:100%; height:90px; border-radius:5px; overflow:hidden; background:#000; display:flex; align-items:center; justify-content:center; cursor:zoom-in; border:1px solid rgba(212,175,55,0.2);" onclick="openGlobalLightbox('${escapeHtml(gf.foto_path)}', '${escapeHtml(item.nama_item + ' - ' + gf.label)}')">
+                        <img src="${escapeHtml(gf.foto_path)}" style="max-width:100%; max-height:100%; object-fit:cover;" title="Klik untuk memperbesar">
+                      </div>
+                      <div style="font-size:10px; font-weight:700; color:var(--gold-light); text-transform:uppercase; margin-top:6px; letter-spacing:0.5px;">
+                        ${escapeHtml(gf.label || 'detail')}
+                      </div>
+                      ${gf.catatan ? `<div style="font-size:9.5px; color:var(--text-secondary); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(gf.catatan)}">${escapeHtml(gf.catatan)}</div>` : ''}
+                    </div>
+                    <button type="button" class="btn btn-danger btn-sm" style="margin-top:8px; font-size:10.5px; padding:3px 8px; width:100%;" onclick="deleteGalleryPhoto(${id}, ${gf.id}, '${escapeHtml(namaItem)}')">
+                      🗑️ Hapus Foto
+                    </button>
+                  </div>
+                `).join('')}
+              </div>
+            `}
+          </div>
+        </div>
       </div>
-    </div>
-  `;
+    `;
 
-  const footer = `
-    <button type="button" class="btn btn-secondary" onclick="closeModal()">Batal</button>
-    <button type="button" class="btn btn-primary" onclick="submitUploadFoto(${id})">Unggah Foto Sekarang</button>
-  `;
+    const footer = `
+      <button type="button" class="btn btn-secondary" onclick="closeModal()">Selesai &amp; Tutup</button>
+    `;
 
-  openModal({
-    title: `📸 Unggah Foto: ${escapeHtml(namaItem)}`,
-    body,
-    footer,
-    size: 'md'
-  });
+    openModal({
+      title: `📸 Manajer Foto &amp; Galeri: ${escapeHtml(namaItem)}`,
+      body,
+      footer,
+      size: 'lg'
+    });
+  } catch (err) {
+    showToast('Gagal memuat manajer foto: ' + err.message, 'error');
+  }
+}
+
+function switchUploadPhotoTab(tabId) {
+  const secMain = document.getElementById('sectionTabMain');
+  const secGal = document.getElementById('sectionTabGallery');
+  const btnMain = document.getElementById('btnTabMainPhotos');
+  const btnGal = document.getElementById('btnTabGalleryPhotos');
+
+  if (secMain && secGal && btnMain && btnGal) {
+    secMain.style.display = tabId === 'tab-main' ? 'block' : 'none';
+    secGal.style.display = tabId === 'tab-gallery' ? 'block' : 'none';
+
+    btnMain.className = `btn btn-sm ${tabId === 'tab-main' ? 'btn-primary' : 'btn-secondary'}`;
+    btnGal.className = `btn btn-sm ${tabId === 'tab-gallery' ? 'btn-primary' : 'btn-secondary'}`;
+  }
+}
+
+function handleGalleryFileSelect(e) {
+  if (e.target.files && e.target.files[0]) {
+    uploadGalleryFileHolder = e.target.files[0];
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const img = document.getElementById('galPreviewImg');
+      const box = document.getElementById('galPreviewContainer');
+      const name = document.getElementById('galPreviewFilename');
+      const size = document.getElementById('galPreviewFilesize');
+      if (img && box) {
+        img.src = evt.target.result;
+        if (name) name.textContent = uploadGalleryFileHolder.name;
+        if (size) size.textContent = `${(uploadGalleryFileHolder.size / 1024).toFixed(1)} KB`;
+        box.style.display = 'flex';
+      }
+    };
+    reader.readAsDataURL(uploadGalleryFileHolder);
+  }
+}
+
+async function submitUploadGalleryPhoto(koleksiId, namaItem) {
+  const fileInput = document.getElementById('galFileInput');
+  const label = document.getElementById('galLabelSelect')?.value || 'detail';
+  const catatan = document.getElementById('galCatatanInput')?.value.trim() || '';
+
+  if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+    showToast('Pilih berkas foto terlebih dahulu.', 'warning');
+    return;
+  }
+
+  const btnSubmit = document.getElementById('btnSubmitGallery');
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = 'Mengunggah...';
+  }
+
+  const fd = new FormData();
+  fd.append('foto', fileInput.files[0]);
+  fd.append('label', label);
+  if (catatan) fd.append('catatan', catatan);
+
+  try {
+    await API.upload(`/koleksi/${koleksiId}/gallery`, fd);
+    showToast('Foto berhasil ditambahkan ke galeri koleksi!', 'success');
+    await showUploadFotoModal(koleksiId, namaItem, 'tab-gallery');
+    loadKoleksi(koleksiCurrentPage);
+  } catch (err) {
+    showToast('Gagal mengunggah foto galeri: ' + err.message, 'error');
+    if (btnSubmit) {
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = '⬆️ Unggah Foto ke Galeri';
+    }
+  }
+}
+
+async function deleteGalleryPhoto(koleksiId, fotoId, namaItem) {
+  if (!confirm('Hapus foto ini dari galeri koleksi?')) return;
+
+  try {
+    await API.delete(`/koleksi/${koleksiId}/gallery/${fotoId}`);
+    showToast('Foto galeri berhasil dihapus.', 'success');
+    await showUploadFotoModal(koleksiId, namaItem, 'tab-gallery');
+    loadKoleksi(koleksiCurrentPage);
+  } catch (err) {
+    showToast('Gagal menghapus foto galeri: ' + err.message, 'error');
+  }
 }
 
 function handleModalObvSelect(e) {
@@ -899,7 +1140,7 @@ async function submitUploadFoto(id) {
       fd.append('foto', uploadRevFileHolder);
       await API.upload(`/koleksi/${id}/foto?tipe=rev`, fd);
     }
-    showToast('Foto koleksi berhasil disimpan!', 'success');
+    showToast('Foto utama koleksi berhasil disimpan!', 'success');
     closeModal();
     loadKoleksi(koleksiCurrentPage);
   } catch (err) {

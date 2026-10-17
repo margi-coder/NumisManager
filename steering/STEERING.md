@@ -98,6 +98,10 @@ NumisManager dibangun khusus untuk komunitas kolektor dan pedagang numismatik (u
 * 🛡️ **Integritas Dokumentasi**:
   * Jangan menghapus atau mengubah dokumentasi historis di folder `docs/` tanpa alasan spesifik.
   * Setiap penambahan fitur utama wajib dicatat pada `docs/implementation_steps.md` dan `README.md`.
+* 🔒 **Protokol Version Control & Git Push**:
+  * **Tahan Git Push Otomatis**: Semua perubahan kode atau dokumen hanya di-commit di repositori Git lokal (`git commit`). Agen DILARANG melakukan `git push` ke remote GitHub secara mandiri tanpa instruksi / konfirmasi eksplisit dari pengguna.
+  * **Pengingat / Konfirmasi Push**: Setiap kali selesai melakukan commit perubahan lokal, agen wajib memberikan pengingat dan meminta konfirmasi kepada pengguna apakah ingin melakukan `git push origin main`.
+  * **Hanya Eksekusi Saat Diminta**: Perintah `git push` hanya dijalankan saat pengguna secara spesifik memerintahkan atau mengonfirmasikannya.
 
 ---
 
@@ -108,4 +112,5 @@ NumisManager dibangun khusus untuk komunitas kolektor dan pedagang numismatik (u
 | **Menjalankan Server** | Dobel klik `run.bat` atau `python main.py` | Berjalan di `http://localhost:8000` |
 | **Mengaktifkan Tunnel HP** | Dobel klik `tunnel.bat` | Menghasilkan tautan HTTPS publik |
 | **Kredensial Bawaan** | `admin` / `admin123` | Default superuser saat database pertama diinisialisasi |
-| **Sinkronisasi Git** | `git push origin main` | Terhubung ke repositori GitHub resmi |
+| **Commit Lokal** | `git commit -m "..."` | Komit perubahan ke repositori lokal |
+| **Sinkronisasi Git Remote** | `git push origin main` | **Hanya dijalankan atas konfirmasi/perintah pengguna** |

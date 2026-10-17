@@ -18,9 +18,12 @@ Dokumen ini dibaca secara otomatis oleh Antigravity dan agen AI lainnya sebagai 
    * **Penomoran Lembar**: Gunakan format `Lembar X/Y` untuk halaman kiri dan kanan.
    * **Tooltip Cerdas**: Baris teratas tabel koleksi/stok wajib menggunakan kelas `tooltip-down` agar pratinjau foto tidak terpotong oleh batas layar atas.
    * **Modal Detail**: Harus berorientasi melebar (*ultra-wide*) 2 kolom tanpa scroll berlebih.
-4. **Keamanan & Version Control**:
+4. **Keamanan & Protokol Git Push**:
    * Jangan pernah meng-stage atau meng-commit file biner besar `tools/bin/` (misal: `cloudflared.exe` 55 MB+) atau folder `.venv/` / `__pycache__/`.
-   * Jaga repository git lokal tetap tersinkronisasi bersih dengan remote `https://github.com/margi-coder/NumisManager.git`.
+   * **ATURAN MUTLAK GIT PUSH**:
+     * **Tahan Git Push Otomatis**: Agen DILARANG melakukan `git push` ke remote GitHub secara mandiri tanpa instruksi / konfirmasi eksplisit dari pengguna.
+     * **Komit Lokal & Pengingat Rutin**: Setiap perubahan yang selesai wajib di-commit ke Git lokal terlebih dahulu (`git commit`), dan agen wajib memberikan pengingat/konfirmasi kepada pengguna di akhir respon apakah ingin melakukan `git push` ke remote GitHub.
+     * Hanya jalankan `git push` bila pengguna secara tegas memerintahkannya.
 5. **Format Data**:
    * Mata uang: Gunakan `formatRupiah(value)` untuk tampilan IDR.
    * Tanggal: Gunakan `formatDate(value)` untuk format Indonesia yang konsisten.

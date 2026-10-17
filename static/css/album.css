@@ -1494,3 +1494,184 @@
   color: var(--text-primary);
   line-height: 1.25;
 }
+
+/* ==========================================================================
+   VIEW SIZE MODES (STANDAR vs PAS LAYAR / SMART AUTO-FIT)
+   ========================================================================== */
+.album-viewsize-control {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--border-gold);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 3px;
+  margin-left: 6px;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.viewsize-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  white-space: nowrap;
+}
+
+.viewsize-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.viewsize-btn.active {
+  background: linear-gradient(135deg, var(--gold-primary), #a88410);
+  color: #0a0c10;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.45);
+}
+
+.viewsize-btn-icon {
+  font-size: 12px;
+}
+
+/* SMART AUTO-FIT LAYOUT ADJUSTMENTS */
+body.album-fit-active .content-area {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  overflow: hidden;
+}
+
+.album-viewer-container.view-mode-fit {
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.album-viewer-container.view-mode-fit .album-viewer-toolbar {
+  padding: 8px 16px;
+  margin-bottom: 8px;
+}
+
+.album-viewer-container.view-mode-fit .album-book-wrapper {
+  transition: height 0.2s ease, max-width 0.2s ease;
+  min-height: 380px;
+}
+
+.album-viewer-container.view-mode-fit .album-binder-book {
+  min-height: 0 !important;
+  height: 100% !important;
+  padding: 10px 14px;
+  box-sizing: border-box;
+}
+
+.album-viewer-container.view-mode-fit .interactive-turn-layer {
+  top: 10px;
+  bottom: 10px;
+  width: calc(50% - 14px);
+}
+
+.album-viewer-container.view-mode-fit .binder-spine {
+  padding: 8px 0;
+  width: 36px;
+}
+
+.album-viewer-container.view-mode-fit .binder-ring {
+  width: 26px;
+  height: 40px;
+}
+
+.album-viewer-container.view-mode-fit .binder-ring::before {
+  height: 16px;
+  border-width: 4px;
+}
+
+.album-viewer-container.view-mode-fit .album-page {
+  padding: 8px 10px;
+}
+
+.album-viewer-container.view-mode-fit .album-page-header {
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+
+.album-viewer-container.view-mode-fit .album-page-number-pill {
+  font-size: 0.72rem;
+}
+
+.album-viewer-container.view-mode-fit .sheet-indicator-pill {
+  font-size: 0.7rem;
+  padding: 2px 7px;
+}
+
+.album-viewer-container.view-mode-fit .sheet-slot-configurator {
+  padding: 1px 3px;
+}
+
+.album-viewer-container.view-mode-fit .sheet-slot-btn {
+  font-size: 0.65rem;
+  padding: 1px 4px;
+}
+
+.album-viewer-container.view-mode-fit .album-pockets-container {
+  gap: 6px;
+}
+
+.album-viewer-container.view-mode-fit .refill-pocket {
+  padding: 4px;
+}
+
+.album-viewer-container.view-mode-fit .banknote-label-strip {
+  padding: 2px 5px;
+  font-size: 0.66rem;
+}
+
+.album-viewer-container.view-mode-fit .inside-cover-box {
+  padding: 16px 18px;
+  max-width: 360px;
+}
+
+.album-viewer-container.view-mode-fit .inside-cover-emblem {
+  font-size: 2.2rem;
+  margin-bottom: 6px;
+}
+
+.album-viewer-container.view-mode-fit .inside-cover-title {
+  font-size: 1.1rem;
+  margin-bottom: 4px;
+}
+
+.album-viewer-container.view-mode-fit .inside-cover-sub {
+  font-size: 0.75rem;
+  margin-bottom: 10px;
+}
+
+.album-viewer-container.view-mode-fit .inside-cover-prompt {
+  font-size: 0.72rem;
+  padding: 4px 8px;
+}
+
+/* FULLSCREEN PRESENTATION STYLING */
+.album-viewer-container:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  padding: 12px 20px;
+  background: var(--bg-base);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.album-viewer-container:fullscreen .album-binder-book {
+  min-height: 0 !important;
+  height: 100% !important;
+}
+

@@ -20,7 +20,8 @@ let albumState = {
   isDragging: false,
   dragStartX: 0,
   dragDirection: null, // 'next' or 'prev'
-  dragProgress: 0
+  dragProgress: 0,
+  viewMode: localStorage.getItem('numis_album_view_mode') || 'standard'
 };
 
 // ============================================================================
@@ -101,6 +102,7 @@ function previewSelectedTheme(themeValue) {
 // 1. MAIN ENTRY POINT - LOAD ALBUM SHELF
 // ----------------------------------------------------------------------------
 async function loadAlbum() {
+  document.body.classList.remove('album-fit-active');
   const content = document.getElementById('contentArea');
   content.innerHTML = `
     <div class="empty-state" style="padding: 60px 20px;">
@@ -277,7 +279,7 @@ function renderAlbumBookView() {
   }
 
   content.innerHTML = `
-    <div class="album-viewer-container">
+    <div class="album-viewer-container ${albumState.viewMode === 'fit' ? 'view-mode-fit' : ''}">
       <!-- Top Navigation Toolbar -->
       <div class="album-viewer-toolbar">
         <div class="album-toolbar-left">
@@ -313,6 +315,21 @@ function renderAlbumBookView() {
           <button class="btn btn-secondary btn-sm" onclick="flipSpreadNext()" ${spreadIndex >= totalLembar ? 'disabled' : ''} title="Balik Lembar ke Berikutnya">
             Balik ke Kanan ❯
           </button>
+
+          <!-- Pilihan View Size di Lingkaran Merah -->
+          <div class="album-viewsize-control" id="albumViewSizeControl" title="Pilihan Ukuran Tampilan Album">
+            <button type="button" class="viewsize-btn ${albumState.viewMode === 'standard' ? 'active' : ''}" id="btnViewStandard" onclick="setAlbumViewMode('standard')" title="Ukuran Standar (Ukuran asli dengan scroll halaman)">
+              <span class="viewsize-btn-icon">📏</span>
+              <span>Standar</span>
+            </button>
+            <button type="button" class="viewsize-btn ${albumState.viewMode === 'fit' ? 'active' : ''}" id="btnViewFit" onclick="setAlbumViewMode('fit')" title="Pas Layar Cerdas (Menyesuaikan seluruh bentuk album agar utuh di layar tanpa terpotong)">
+              <span class="viewsize-btn-icon">📐</span>
+              <span>Pas Layar</span>
+            </button>
+            <button type="button" class="viewsize-btn" id="btnViewFullscreen" onclick="toggleAlbumFullscreen()" title="Layar Penuh (Immersif Fullscreen)">
+              <span class="viewsize-btn-icon">⛶</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -362,6 +379,7 @@ function renderAlbumBookView() {
 
   // Attach interactive Pointer Events for click-drag page turning
   setupDragToFlip();
+  applyAlbumViewMode(albumState.viewMode);
 }
 
 // ----------------------------------------------------------------------------
@@ -791,6 +809,120 @@ function flipSpreadPrev() {
     albumState.spreadIndex -= 1;
     renderAlbumBookView();
   }
+}
+
+// ----------------------------------------------------------------------------
+// 6B. VIEW SIZE MODES (STANDAR vs PAS LAYAR CERDAS / SMART FIT)
+// ----------------------------------------------------------------------------
+
+/**
+ * Mengubah mode ukuran tampilan album digital (Standar vs Pas Layar)
+ */
+function setAlbumViewMode(mode) {
+  albumState.viewMode = mode;
+  try {
+    localStorage.setItem('numis_album_view_mode', mode);
+  } catch (e) {
+    console.warn(e);
+  }
+  applyAlbumViewMode(mode);
+}
+
+/**
+ * Menerapkan tata letak sesuai mode tampilan yang dipilih
+ */
+function applyAlbumViewMode(mode) {
+  const container = document.querySelector('.album-viewer-container');
+  const wrapper = document.getElementById('bookStageWrapper');
+  const btnStandard = document.getElementById('btnViewStandard');
+  const btnFit = document.getElementById('btnViewFit');
+  const btnFullscreen = document.getElementById('btnViewFullscreen');
+
+  if (!container || !wrapper) return;
+
+  if (btnStandard) btnStandard.classList.toggle('active', mode === 'standard');
+  if (btnFit) btnFit.classList.toggle('active', mode === 'fit');
+  if (btnFullscreen) btnFullscreen.classList.toggle('active', document.fullscreenElement !== null);
+
+  if (mode === 'fit') {
+    container.classList.add('view-mode-fit');
+    document.body.classList.add('album-fit-active');
+    updateAlbumFitDimensions();
+  } else {
+    container.classList.remove('view-mode-fit');
+    document.body.classList.remove('album-fit-active');
+    wrapper.style.height = '';
+    wrapper.style.maxHeight = '';
+    wrapper.style.maxWidth = '';
+  }
+}
+
+/**
+ * Menghitung ruang layar yang tersedia secara presisi agar seluruh buku album pas di layar
+ */
+function updateAlbumFitDimensions() {
+  if (albumState.viewMode !== 'fit') return;
+  const wrapper = document.getElementById('bookStageWrapper');
+  const toolbar = document.querySelector('.album-viewer-toolbar');
+  if (!wrapper || !toolbar) return;
+
+  const toolbarRect = toolbar.getBoundingClientRect();
+  const bottomGap = 16;
+  const availHeight = Math.max(380, window.innerHeight - toolbarRect.bottom - bottomGap);
+  
+  // Proporsi binder 2-halaman (aspek rasio sekitar 1.68 - 1.74)
+  const contentArea = document.getElementById('contentArea');
+  const availWidth = Math.min(1450, (contentArea ? contentArea.clientWidth : window.innerWidth) - 20);
+  const maxW = Math.min(availWidth, availHeight * 1.72);
+
+  wrapper.style.height = `${availHeight}px`;
+  wrapper.style.maxHeight = `${availHeight}px`;
+  wrapper.style.maxWidth = `${maxW}px`;
+}
+
+/**
+ * Mode Layar Penuh (Immersif Fullscreen)
+ */
+async function toggleAlbumFullscreen() {
+  try {
+    const container = document.querySelector('.album-viewer-container') || document.documentElement;
+    if (!document.fullscreenElement) {
+      if (container.requestFullscreen) {
+        await container.requestFullscreen();
+      } else if (container.webkitRequestFullscreen) {
+        await container.webkitRequestFullscreen();
+      } else if (container.msRequestFullscreen) {
+        await container.msRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        await document.exitFullscreen();
+      }
+    }
+  } catch (err) {
+    console.warn('Fullscreen error:', err);
+    showToast('Mode fullscreen tidak didukung atau dibatasi oleh browser', 'info');
+  }
+}
+
+// Global window event listeners for smart fit and fullscreen
+if (!window._albumViewEventsBound) {
+  window.addEventListener('resize', () => {
+    if (albumState.viewMode === 'fit') {
+      updateAlbumFitDimensions();
+    }
+  });
+
+  document.addEventListener('fullscreenchange', () => {
+    const isFs = document.fullscreenElement !== null;
+    const btnFs = document.getElementById('btnViewFullscreen');
+    if (btnFs) btnFs.classList.toggle('active', isFs);
+    if (albumState.viewMode === 'fit' || isFs) {
+      setTimeout(updateAlbumFitDimensions, 100);
+    }
+  });
+
+  window._albumViewEventsBound = true;
 }
 
 // ----------------------------------------------------------------------------

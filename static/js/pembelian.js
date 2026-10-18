@@ -489,6 +489,13 @@ async function submitSinglePurchase() {
  * 2. PEMBELIAN BATCH
  * =========================================================================
  */
+let batchFilterState = {
+  search: '',
+  status: '',
+  perolehan: '',
+  isVisible: localStorage.getItem('numis_batch_filter_visible') === '1'
+};
+
 async function loadPembelianBatch() {
   currentBatchId = null;
   const contentArea = document.getElementById('contentArea');
@@ -499,9 +506,54 @@ async function loadPembelianBatch() {
           <h3>Manajemen Pembelian Batch / Lot</h3>
           <p class="input-hint">Pengadaan paket lelang koleksi dengan alokasi ongkir otomatis ke setiap item</p>
         </div>
-        <button class="btn btn-primary" onclick="showCreateBatchModal()">
-          <span>+ Buat Batch Baru</span>
-        </button>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <button class="btn btn-secondary btn-sm" id="btnToggleBatchFilter" onclick="toggleBatchFilterBar()" title="Tampilkan / Sembunyikan Filter Bar" style="${batchFilterState.isVisible ? 'border-color:var(--gold-primary); color:var(--gold-light); background:rgba(212,175,55,0.14);' : ''}">
+            <span id="batchFilterIcon">${batchFilterState.isVisible ? '▲' : '🔍'}</span>
+            <span id="batchFilterBtnText">${batchFilterState.isVisible ? 'Tutup Filter' : 'Filter Bar'}</span>
+          </button>
+          <button class="btn btn-primary" onclick="showCreateBatchModal()">
+            <span>+ Buat Batch Baru</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Collapsible Filter Bar -->
+      <div class="filter-bar" id="batchFilterBar" style="display:${batchFilterState.isVisible ? 'flex' : 'none'}; margin-bottom:16px;">
+        <div class="search-input-wrapper" style="flex:1; min-width:220px;">
+          <span class="search-icon">🔍</span>
+          <input 
+            type="text" 
+            id="batchFilterSearch" 
+            class="form-control" 
+            placeholder="Cari kode batch, nama lot, supplier..." 
+            value="${escapeHtml(batchFilterState.search)}"
+            onkeydown="if(event.key==='Enter') applyBatchFilter()"
+          >
+        </div>
+
+        <select id="batchFilterStatus" class="form-select" style="max-width:170px;" onchange="applyBatchFilter()">
+          <option value="">Semua Status</option>
+          <option value="pesan" ${batchFilterState.status === 'pesan' ? 'selected' : ''}>Pesan</option>
+          <option value="dikirim" ${batchFilterState.status === 'dikirim' ? 'selected' : ''}>Dikirim</option>
+          <option value="terima" ${batchFilterState.status === 'terima' ? 'selected' : ''}>Diterima</option>
+        </select>
+
+        <select id="batchFilterPerolehan" class="form-select" style="max-width:180px;" onchange="applyBatchFilter()">
+          <option value="">Semua Perolehan</option>
+          ${PEROLEHAN_OPTIONS.map(opt => `<option value="${opt}" ${batchFilterState.perolehan === opt ? 'selected' : ''}>${PEROLEHAN_LABELS[opt] || opt}</option>`).join('')}
+        </select>
+
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-primary btn-sm" onclick="applyBatchFilter()">
+            Cari
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="resetBatchFilter()" title="Reset semua filter">
+            Reset
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="toggleBatchFilterBar(false)" title="Sembunyikan Filter Bar">
+            ▲ Tutup
+          </button>
+        </div>
       </div>
 
       <div id="batchMainView">
@@ -516,10 +568,100 @@ async function loadPembelianBatch() {
   await refreshBatchList();
 }
 
+function toggleBatchFilterBar(forceShow) {
+  if (typeof forceShow === 'boolean') {
+    batchFilterState.isVisible = forceShow;
+  } else {
+    batchFilterState.isVisible = !batchFilterState.isVisible;
+  }
+
+  try {
+    localStorage.setItem('numis_batch_filter_visible', batchFilterState.isVisible ? '1' : '0');
+  } catch (e) {
+    console.warn(e);
+  }
+
+  const bar = document.getElementById('batchFilterBar');
+  const btn = document.getElementById('btnToggleBatchFilter');
+  const icon = document.getElementById('batchFilterIcon');
+  const text = document.getElementById('batchFilterBtnText');
+
+  if (bar) {
+    bar.style.display = batchFilterState.isVisible ? 'flex' : 'none';
+  }
+  if (btn) {
+    if (batchFilterState.isVisible) {
+      btn.style.borderColor = 'var(--gold-primary)';
+      btn.style.color = 'var(--gold-light)';
+      btn.style.background = 'rgba(212,175,55,0.14)';
+    } else {
+      btn.style.borderColor = '';
+      btn.style.color = '';
+      btn.style.background = '';
+    }
+  }
+  if (icon) icon.textContent = batchFilterState.isVisible ? '▲' : '🔍';
+  if (text) text.textContent = batchFilterState.isVisible ? 'Tutup Filter' : 'Filter Bar';
+}
+
+function applyBatchFilter() {
+  const sInput = document.getElementById('batchFilterSearch');
+  const stSelect = document.getElementById('batchFilterStatus');
+  const pSelect = document.getElementById('batchFilterPerolehan');
+
+  batchFilterState.search = sInput ? sInput.value.trim() : '';
+  batchFilterState.status = stSelect ? stSelect.value : '';
+  batchFilterState.perolehan = pSelect ? pSelect.value : '';
+
+  renderLoading('batchListTableContainer', 'Memfilter daftar batch pengadaan...');
+  refreshBatchList();
+}
+
+function resetBatchFilter() {
+  batchFilterState.search = '';
+  batchFilterState.status = '';
+  batchFilterState.perolehan = '';
+
+  const sInput = document.getElementById('batchFilterSearch');
+  const stSelect = document.getElementById('batchFilterStatus');
+  const pSelect = document.getElementById('batchFilterPerolehan');
+
+  if (sInput) sInput.value = '';
+  if (stSelect) stSelect.value = '';
+  if (pSelect) pSelect.value = '';
+
+  renderLoading('batchListTableContainer', 'Memuat daftar batch pengadaan...');
+  refreshBatchList();
+}
+
 async function refreshBatchList() {
   try {
-    const res = await API.get('/batch');
-    const batches = res.items || res.data || (Array.isArray(res) ? res : []);
+    const params = new URLSearchParams();
+    if (batchFilterState.search) params.append('search', batchFilterState.search);
+    if (batchFilterState.status) params.append('status', batchFilterState.status);
+    if (batchFilterState.perolehan) params.append('perolehan', batchFilterState.perolehan);
+    params.append('limit', '100');
+
+    const queryStr = params.toString() ? `?${params.toString()}` : '';
+    const res = await API.get('/batch' + queryStr);
+    let batches = res.items || res.data || (Array.isArray(res) ? res : []);
+
+    // Filter sisi klien juga sebagai proteksi ekstra
+    if (batchFilterState.search) {
+      const q = batchFilterState.search.toLowerCase();
+      batches = batches.filter(b => 
+        (b.kode_batch && b.kode_batch.toLowerCase().includes(q)) ||
+        (b.nama_batch && b.nama_batch.toLowerCase().includes(q)) ||
+        (b.supplier_nama && b.supplier_nama.toLowerCase().includes(q))
+      );
+    }
+    if (batchFilterState.status) {
+      batches = batches.filter(b => b.status === batchFilterState.status);
+    }
+    if (batchFilterState.perolehan) {
+      batches = batches.filter(b => b.perolehan === batchFilterState.perolehan);
+    }
+
     renderBatchList(batches);
   } catch (err) {
     const container = document.getElementById('batchListTableContainer');
@@ -538,12 +680,22 @@ function renderBatchList(batches) {
   if (!container) return;
 
   if (!batches || batches.length === 0) {
-    renderEmpty(
-      'batchListTableContainer',
-      'Belum Ada Batch Pengadaan',
-      'Belum ada batch pembelian tersimpan. Buat batch baru untuk mulai mencatat pengadaan lot/lelang.',
-      '<button class="btn btn-primary btn-sm" onclick="showCreateBatchModal()">+ Buat Batch Baru</button>'
-    );
+    const hasActiveFilter = Boolean(batchFilterState.search || batchFilterState.status || batchFilterState.perolehan);
+    if (hasActiveFilter) {
+      renderEmpty(
+        'batchListTableContainer',
+        'Tidak Ditemukan Batch Sesuai Filter',
+        'Tidak ada batch pengadaan yang cocok dengan kriteria pencarian/filter saat ini.',
+        '<button class="btn btn-secondary btn-sm" onclick="resetBatchFilter()">Reset Filter</button>'
+      );
+    } else {
+      renderEmpty(
+        'batchListTableContainer',
+        'Belum Ada Batch Pengadaan',
+        'Belum ada batch pembelian tersimpan. Buat batch baru untuk mulai mencatat pengadaan lot/lelang.',
+        '<button class="btn btn-primary btn-sm" onclick="showCreateBatchModal()">+ Buat Batch Baru</button>'
+      );
+    }
     return;
   }
 
@@ -554,8 +706,6 @@ function renderBatchList(batches) {
           <tr>
             <th>Kode Batch</th>
             <th>Nama Batch / Lot</th>
-            <th>Supplier</th>
-            <th>Perolehan</th>
             <th>Tanggal Beli</th>
             <th style="text-align:center;">Jumlah Item</th>
             <th>Total Ongkir Lot</th>
@@ -571,18 +721,19 @@ function renderBatchList(batches) {
     const itemCount = b.item_count ?? (b.items?.length ?? 0);
 
     html += `
-      <tr style="cursor:pointer;" onclick="selectBatch(${b.id})" title="Klik untuk membuka & mengelola batch ini">
+      <tr style="cursor:pointer;" onclick="selectBatch(${b.id})" title="Klik untuk membuka &amp; mengelola batch ini">
         <td><strong style="color:var(--gold-light); font-family:monospace;">${escapeHtml(b.kode_batch || '#' + b.id)}</strong></td>
         <td><strong style="color:var(--text-primary); font-size:13px;">${escapeHtml(batchTitle)}</strong></td>
-        <td>${escapeHtml(b.supplier_nama || b.supplier?.nama || '-')}</td>
-        <td><span style="font-size:11px; color:var(--text-secondary);">${PEROLEHAN_LABELS[b.perolehan] || b.perolehan || '-'}</span></td>
         <td>${formatDate(b.tanggal_beli || b.created_at)}</td>
-        <td style="text-align:center;"><span class="badge" style="background:rgba(212,175,55,0.12); color:var(--gold-light);">${itemCount} item</span></td>
+        <td style="text-align:center;"><span class="badge" style="background:rgba(212,175,55,0.12); color:var(--gold-light); font-weight:600;">${itemCount} item</span></td>
         <td style="color:var(--gold-light); font-weight:600;">${formatRupiah(b.total_ongkir || 0)}</td>
         <td>${formatStatus(b.status)}</td>
         <td style="text-align:center;" onclick="event.stopPropagation()">
-          <div class="td-actions" style="justify-content:center;">
-            <button class="btn btn-primary btn-sm" onclick="selectBatch(${b.id})" title="Buka & Kelola Batch">
+          <div class="td-actions" style="justify-content:center; gap:6px;">
+            <button class="btn btn-secondary btn-icon" onclick="showBatchDetailModal(${b.id})" title="Lihat Detail Lengkap Batch">
+              👁️
+            </button>
+            <button class="btn btn-primary btn-sm" onclick="selectBatch(${b.id})" title="Buka &amp; Kelola Batch">
               📂 Buka &amp; Kelola
             </button>
             <button class="btn btn-danger btn-icon" onclick="deleteBatch(${b.id}, '${escapeHtml(batchTitle)}')" title="Hapus Batch">
@@ -601,6 +752,160 @@ function renderBatchList(batches) {
   `;
 
   container.innerHTML = html;
+}
+
+/**
+ * Modal Tampilan Detail Lengkap Batch Pengadaan
+ */
+async function showBatchDetailModal(batchId) {
+  try {
+    const b = await API.get(`/batch/${batchId}`);
+    if (!b) throw new Error('Data batch tidak ditemukan');
+
+    const items = b.items || [];
+    const totalBeli = items.reduce((sum, it) => sum + Number(it.harga || 0), 0);
+    const totalOngkir = Number(b.total_ongkir || 0);
+    const totalHpp = totalBeli + totalOngkir;
+    const batchNama = b.nama_batch || b.kode_batch || `Batch #${b.id}`;
+
+    const body = `
+      <div class="batch-detail-modal-content" style="display:flex; flex-direction:column; gap:16px;">
+        <!-- Header Info Cards -->
+        <div class="stat-cards-grid" style="grid-template-columns: repeat(4, 1fr); gap:10px; margin-bottom:4px;">
+          <div class="stat-card" style="padding:12px;">
+            <div class="stat-label" style="font-size:11px;">Jumlah Item</div>
+            <div class="stat-value" style="font-size:1.15rem; color:var(--gold-light);">${items.length} item</div>
+          </div>
+          <div class="stat-card" style="padding:12px;">
+            <div class="stat-label" style="font-size:11px;">Total Beli</div>
+            <div class="stat-value" style="font-size:1.15rem; color:var(--text-primary);">${formatRupiah(totalBeli)}</div>
+          </div>
+          <div class="stat-card" style="padding:12px;">
+            <div class="stat-label" style="font-size:11px;">Total Ongkir Lot</div>
+            <div class="stat-value" style="font-size:1.15rem; color:var(--info);">${formatRupiah(totalOngkir)}</div>
+          </div>
+          <div class="stat-card" style="padding:12px;">
+            <div class="stat-label" style="font-size:11px;">Total HPP Lot</div>
+            <div class="stat-value" style="font-size:1.15rem; color:var(--gold-primary);">${formatRupiah(totalHpp)}</div>
+          </div>
+        </div>
+
+        <!-- Meta Details Grid -->
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:14px 16px;">
+          <div class="data-grid-2" style="gap:12px;">
+            <div>
+              <div style="margin-bottom:8px;">
+                <span style="font-size:11px; color:var(--text-secondary); display:block;">Kode Batch</span>
+                <strong style="color:var(--gold-light); font-family:monospace; font-size:13px;">${escapeHtml(b.kode_batch || '#' + b.id)}</strong>
+              </div>
+              <div style="margin-bottom:8px;">
+                <span style="font-size:11px; color:var(--text-secondary); display:block;">Supplier / Pelelang</span>
+                <strong style="color:var(--text-primary); font-size:13px;">${escapeHtml(b.supplier_nama || '-')}</strong>
+                ${b.supplier_no_hp ? `<span style="font-size:11px; color:var(--text-muted); display:block;">📞 ${escapeHtml(b.supplier_no_hp)}</span>` : ''}
+              </div>
+              <div>
+                <span style="font-size:11px; color:var(--text-secondary); display:block;">Metode Perolehan</span>
+                <span class="badge" style="background:rgba(212,175,55,0.12); color:var(--gold-light); font-size:11px;">
+                  ${escapeHtml(PEROLEHAN_LABELS[b.perolehan] || b.perolehan || '-')}
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <div style="margin-bottom:8px;">
+                <span style="font-size:11px; color:var(--text-secondary); display:block;">Tanggal Pembelian</span>
+                <strong style="color:var(--text-primary); font-size:13px;">${formatDate(b.tanggal_beli || b.created_at)}</strong>
+              </div>
+              <div style="margin-bottom:8px;">
+                <span style="font-size:11px; color:var(--text-secondary); display:block;">Status Batch</span>
+                <div>${formatStatus(b.status)}</div>
+              </div>
+              <div>
+                <span style="font-size:11px; color:var(--text-secondary); display:block;">Tautan Bukti / Profil</span>
+                ${b.link_pembelian ? `
+                  <a href="${escapeHtml(b.link_pembelian)}" target="_blank" rel="noopener noreferrer" style="color:var(--info); font-size:12px; text-decoration:underline; word-break:break-all;">
+                    🔗 Buka Link Pembelian
+                  </a>
+                ` : b.supplier_link ? `
+                  <a href="${escapeHtml(b.supplier_link)}" target="_blank" rel="noopener noreferrer" style="color:var(--info); font-size:12px; text-decoration:underline; word-break:break-all;">
+                    🔗 Profil Supplier
+                  </a>
+                ` : '<span style="font-size:12px; color:var(--text-muted);">-</span>'}
+              </div>
+            </div>
+          </div>
+
+          ${b.catatan ? `
+            <div style="margin-top:10px; padding-top:10px; border-top:1px dashed var(--border);">
+              <span style="font-size:11px; color:var(--text-secondary); display:block;">Catatan Internal</span>
+              <p style="font-size:12px; color:var(--text-primary); margin:2px 0 0; white-space:pre-wrap;">${escapeHtml(b.catatan)}</p>
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- Items Table Preview -->
+        <div>
+          <h5 style="font-size:13px; color:var(--text-primary); margin:0 0 8px; display:flex; justify-content:space-between; align-items:center;">
+            <span>Daftar Item Koleksi dalam Batch (${items.length})</span>
+          </h5>
+          <div class="table-wrapper table-compact" style="max-height:260px; overflow-y:auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>No</th>
+                  <th>Kode Item</th>
+                  <th>Nama Item</th>
+                  <th>Grade</th>
+                  <th>Jenis</th>
+                  <th style="text-align:center;">Qty</th>
+                  <th>Harga Beli</th>
+                  <th>HPP/pcs</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${items.length === 0 ? `
+                  <tr>
+                    <td colspan="8" style="text-align:center; color:var(--text-muted); padding:16px;">
+                      Belum ada item koleksi dalam batch ini
+                    </td>
+                  </tr>
+                ` : items.map((it, idx) => `
+                  <tr>
+                    <td>${idx + 1}</td>
+                    <td><strong style="color:var(--gold-light); font-family:monospace; font-size:11px;">${escapeHtml(it.kode_item || '-')}</strong></td>
+                    <td><strong>${escapeHtml(it.nama_item || '-')}</strong></td>
+                    <td>${formatGrade(it.grade)}</td>
+                    <td>${formatJenis(it.jenis)}</td>
+                    <td style="text-align:center;">${it.qty || 1}</td>
+                    <td>${formatRupiah(it.harga || 0)}</td>
+                    <td style="color:var(--gold-light); font-weight:600;">${formatRupiah(it.hpp_per_pcs || it.hpp || 0)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const footer = `
+      <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Tutup</button>
+        <button type="button" class="btn btn-primary" onclick="closeModal(); selectBatch(${b.id});">
+          <span>📂 Buka &amp; Kelola Batch Ini</span>
+        </button>
+      </div>
+    `;
+
+    openModal({
+      title: `📦 Detail Batch: ${escapeHtml(batchNama)}`,
+      body: body,
+      footer: footer,
+      size: 'lg'
+    });
+  } catch (err) {
+    showToast('Gagal memuat detail batch: ' + err.message, 'error');
+  }
 }
 
 async function selectBatch(id) {

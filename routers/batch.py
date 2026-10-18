@@ -30,9 +30,10 @@ def generate_kode_batch(conn: sqlite3.Connection) -> str:
 @router.get("/")
 def list_batches(
     page: int = Query(1, ge=1, description="Nomor halaman"),
-    limit: int = Query(20, ge=1, le=100, description="Jumlah data per halaman"),
-    status: Optional[str] = Query(None, description="Filter status batch (pesan/dikirim/selesai)"),
-    search: Optional[str] = Query(None, description="Pencarian nama batch atau kode batch"),
+    limit: int = Query(100, ge=1, le=500, description="Jumlah data per halaman"),
+    status: Optional[str] = Query(None, description="Filter status batch (pesan/dikirim/terima)"),
+    perolehan: Optional[str] = Query(None, description="Filter metode perolehan"),
+    search: Optional[str] = Query(None, description="Pencarian nama batch, kode batch, atau supplier"),
     conn: sqlite3.Connection = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
@@ -44,15 +45,23 @@ def list_batches(
     if status:
         where_clauses.append("b.status = ?")
         params.append(status)
+    if perolehan:
+        where_clauses.append("b.perolehan = ?")
+        params.append(perolehan)
     if search:
         search_param = f"%{search.strip()}%"
-        where_clauses.append("(b.kode_batch LIKE ? OR b.nama_batch LIKE ?)")
-        params.extend([search_param, search_param])
+        where_clauses.append("(b.kode_batch LIKE ? OR b.nama_batch LIKE ? OR s.nama LIKE ?)")
+        params.extend([search_param, search_param, search_param])
 
     where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
     # Count total
-    count_sql = f"SELECT COUNT(*) as total FROM batch_pembelian b {where_sql}"
+    count_sql = f"""
+        SELECT COUNT(DISTINCT b.id) as total 
+        FROM batch_pembelian b 
+        LEFT JOIN supplier s ON b.supplier_id = s.id 
+        {where_sql}
+    """
     cursor.execute(count_sql, tuple(params))
     total_records = cursor.fetchone()["total"]
 

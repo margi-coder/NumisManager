@@ -262,21 +262,80 @@ def delete_batch(
     conn: sqlite3.Connection = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Menghapus batch pembelian dan melepaskan relasi item koleksi (batch_id diset NULL)."""
+    """
+    Menghapus batch pembelian secara permanen.
+    Sesuai aturan bisnis: Seluruh item dalam batch pada koleksi & stok beserta
+    keterkaitan di album digital (album_item), multi-foto galeri (koleksi_foto),
+    dan transaksi penjualan akan ikut dihapus tuntas.
+    """
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM batch_pembelian WHERE id = ?", (batch_id,))
-    if not cursor.fetchone():
+    cursor.execute("SELECT id, nama_batch FROM batch_pembelian WHERE id = ?", (batch_id,))
+    batch = cursor.fetchone()
+    if not batch:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Batch pembelian tidak ditemukan"
         )
 
-    # Lepas relasi koleksi
-    cursor.execute("UPDATE koleksi SET batch_id = NULL WHERE batch_id = ?", (batch_id,))
-    # Hapus batch
+    # 1. Ambil semua ID item koleksi/stok yang langsung terhubung ke batch ini
+    cursor.execute("SELECT id FROM koleksi WHERE batch_id = ?", (batch_id,))
+    batch_items = cursor.fetchall()
+    item_ids = [row["id"] for row in batch_items]
+
+    # 2. Ambil semua ID item turunan (pecahan stok) yang berasal dari item dalam batch ini
+    child_item_ids = []
+    if item_ids:
+        placeholders_parent = ",".join("?" for _ in item_ids)
+        cursor.execute(
+            f"SELECT id FROM koleksi WHERE parent_id IN ({placeholders_parent})",
+            tuple(item_ids)
+        )
+        child_item_ids = [row["id"] for row in cursor.fetchall()]
+
+    all_item_ids = list(set(item_ids + child_item_ids))
+
+    if all_item_ids:
+        placeholders_all = ",".join("?" for _ in all_item_ids)
+
+        # 3. Hapus slot penempatan item di seluruh Album Digital (album_item)
+        cursor.execute(
+            f"DELETE FROM album_item WHERE koleksi_id IN ({placeholders_all})",
+            tuple(all_item_ids)
+        )
+
+        # 4. Hapus entri multi-foto galeri tambahan (koleksi_foto)
+        cursor.execute(
+            f"DELETE FROM koleksi_foto WHERE koleksi_id IN ({placeholders_all})",
+            tuple(all_item_ids)
+        )
+
+        # 5. Hapus riwayat penjualan jika ada item yang tercatat (penjualan)
+        cursor.execute(
+            f"DELETE FROM penjualan WHERE koleksi_id IN ({placeholders_all})",
+            tuple(all_item_ids)
+        )
+
+        # 6. Hapus item turunan pecahan stok terlebih dahulu (menjaga foreign key parent_id)
+        if child_item_ids:
+            placeholders_child = ",".join("?" for _ in child_item_ids)
+            cursor.execute(
+                f"DELETE FROM koleksi WHERE id IN ({placeholders_child})",
+                tuple(child_item_ids)
+            )
+
+        # 7. Hapus seluruh item koleksi & stok dalam batch
+        cursor.execute("DELETE FROM koleksi WHERE batch_id = ?", (batch_id,))
+
+    # 8. Hapus header batch pembelian
     cursor.execute("DELETE FROM batch_pembelian WHERE id = ?", (batch_id,))
     conn.commit()
-    return {"message": "Batch pembelian berhasil dihapus"}
+
+    deleted_count = len(all_item_ids)
+    batch_name = batch["nama_batch"] or f"Batch #{batch_id}"
+    return {
+        "message": f"Batch '{batch_name}' beserta {deleted_count} item koleksi/stok dan slot album digital berhasil dihapus.",
+        "deleted_items_count": deleted_count
+    }
 
 @router.post("/{batch_id}/recalculate")
 def recalculate_batch_hpp(

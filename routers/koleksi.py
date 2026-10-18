@@ -372,6 +372,10 @@ def delete_koleksi(
             detail="Item tidak dapat dihapus karena memiliki item pecahan stok"
         )
 
+    # Hapus keterkaitan pada album digital dan galeri foto
+    cursor.execute("DELETE FROM album_item WHERE koleksi_id = ?", (koleksi_id,))
+    cursor.execute("DELETE FROM koleksi_foto WHERE koleksi_id = ?", (koleksi_id,))
+
     cursor.execute("DELETE FROM koleksi WHERE id = ?", (koleksi_id,))
     conn.commit()
     return {"message": "Item koleksi berhasil dihapus"}

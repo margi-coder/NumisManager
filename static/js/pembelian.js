@@ -946,13 +946,13 @@ async function recalculateBatchOngkir(id) {
 }
 
 async function deleteBatch(id, nama) {
-  if (!confirm(`Hapus seluruh batch "${nama}"? Semua item dalam batch ini akan ikut terhapus.`)) {
+  if (!confirm(`Hapus seluruh batch "${nama}"?\n\nPERINGATAN: Semua item dalam batch ini di Koleksi, Stok, serta slot pada Album Digital akan ikut dihapus secara permanen.`)) {
     return;
   }
 
   try {
-    await API.delete(`/batch/${id}`);
-    showToast('Batch berhasil dihapus.', 'success');
+    const res = await API.delete(`/batch/${id}`);
+    showToast(res?.message || 'Batch dan seluruh item terkait berhasil dihapus.', 'success');
     currentBatchId = null;
     loadPembelianBatch();
   } catch (err) {

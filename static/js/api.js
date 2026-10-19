@@ -3,7 +3,7 @@
  */
 
 // Dropdown & Option Constants
-const GRADE_OPTIONS = ['UNC', 'AUNC', 'XF', 'AXF', 'VF', 'AVF', 'F', 'VG', 'G', 'AG', 'POOR', '-'];
+const GRADE_OPTIONS = ['UNC', 'AUNC', 'XF+', 'XF', 'XF-', 'AXF', 'VF+', 'VF', 'VF-', 'AVF', 'F', 'VG', 'G', 'AG', 'POOR', '-'];
 const JENIS_OPTIONS = ['uang_kertas', 'uang_polymer', 'uang_hybrid', 'koin', 'dokumen', 'perlengkapan'];
 const PEROLEHAN_OPTIONS = ['lelang_fb', 'lelang_platform', 'jual_pribadi', 'marketplace'];
 const STATUS_OPTIONS = ['pesan', 'dikirim', 'terima'];
@@ -301,9 +301,13 @@ function formatGrade(grade) {
   const classMap = {
     'UNC': 'badge-grade-unc',
     'AUNC': 'badge-grade-aunc',
+    'XF+': 'badge-grade-xf-plus',
     'XF': 'badge-grade-xf',
+    'XF-': 'badge-grade-xf-minus',
     'AXF': 'badge-grade-axf',
+    'VF+': 'badge-grade-vf-plus',
     'VF': 'badge-grade-vf',
+    'VF-': 'badge-grade-vf-minus',
     'AVF': 'badge-grade-avf',
     'F': 'badge-grade-f',
     'VG': 'badge-grade-vg',
@@ -313,6 +317,11 @@ function formatGrade(grade) {
   };
   const cls = classMap[clean] || 'badge-grade-default';
   return `<span class="badge ${cls}">${clean}</span>`;
+}
+
+function formatGroupItem(groupName) {
+  if (!groupName) return `<span class="badge badge-grade-default">-</span>`;
+  return `<span class="badge badge-group">🗂️ ${escapeHtml(groupName)}</span>`;
 }
 
 function formatStatus(status) {
@@ -512,4 +521,55 @@ function closeGlobalLightbox() {
 function viewImageLightbox(url, title = 'Preview Item') {
   openGlobalLightbox(url, title);
 }
+
+/**
+ * Debounce helper for live search and live filtering
+ */
+function debounce(fn, delay = 280) {
+  let timer;
+  return function(...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+
+/**
+ * Group Item Master Data Cache and Helper
+ */
+let _groupItemCache = null;
+
+async function getGroupItemOptions(forceRefresh = false) {
+  if (!_groupItemCache || forceRefresh) {
+    try {
+      _groupItemCache = await API.get('/group-item');
+    } catch (e) {
+      console.error('Failed to load group items:', e);
+      _groupItemCache = [];
+    }
+  }
+  return _groupItemCache;
+}
+
+function clearGroupItemCache() {
+  _groupItemCache = null;
+}
+
+async function loadGroupItemsIntoDropdown(dropdownId, selectedId = null, defaultLabel = '-- Tanpa Group --') {
+  const select = document.getElementById(dropdownId);
+  if (!select) return;
+
+  try {
+    const list = await getGroupItemOptions();
+    let html = `<option value="">${escapeHtml(defaultLabel)}</option>`;
+    list.forEach(g => {
+      const isSel = selectedId && Number(selectedId) === Number(g.id) ? 'selected' : '';
+      html += `<option value="${g.id}" ${isSel}>${escapeHtml(g.nama_group)}</option>`;
+    });
+    select.innerHTML = html;
+  } catch (err) {
+    console.error('Failed to load group items into dropdown:', err);
+  }
+}
+
+
 

@@ -58,6 +58,7 @@ def list_koleksi(
     catatan: Optional[str] = Query(None, description="Pencarian di catatan atau detail"),
     nomor_seri: Optional[str] = Query(None, description="Filter spesifik nomor seri"),
     kode_item: Optional[str] = Query(None, description="Filter spesifik kode item"),
+    group_id: Optional[int] = Query(None, description="Filter spesifik ID Group Item"),
     conn: sqlite3.Connection = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
@@ -90,6 +91,9 @@ def list_koleksi(
     if batch_id is not None:
         where_clauses.append("k.batch_id = ?")
         params.append(batch_id)
+    if group_id is not None:
+        where_clauses.append("k.group_id = ?")
+        params.append(group_id)
     if hpp_min is not None:
         where_clauses.append("k.hpp_per_pcs >= ?")
         params.append(hpp_min)
@@ -123,10 +127,12 @@ def list_koleksi(
     data_sql = f"""
         SELECT k.*, (k.qty - k.qty_terjual) as qty_tersisa,
                s.nama as supplier_nama,
-               b.kode_batch as batch_kode
+               b.kode_batch as batch_kode,
+               g.nama_group as group_nama
         FROM koleksi k
         LEFT JOIN supplier s ON k.supplier_id = s.id
         LEFT JOIN batch_pembelian b ON k.batch_id = b.id
+        LEFT JOIN group_item g ON k.group_id = g.id
         {where_sql}
         ORDER BY k.id DESC
         LIMIT ? OFFSET ?
@@ -163,6 +169,11 @@ def create_koleksi(
         if not cursor.fetchone():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch tidak ditemukan")
 
+    if payload.group_id:
+        cursor.execute("SELECT id FROM group_item WHERE id = ?", (payload.group_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group item tidak ditemukan")
+
     qty = max(1, payload.qty)
     hpp_calc = calculate_hpp_single(payload.harga, payload.ongkir, qty)
     hpp = hpp_calc["hpp"]
@@ -186,7 +197,7 @@ def create_koleksi(
             bahan, warna_dominan, dimensi, kondisi_fisik, lokasi_simpan, detail,
             catatan_internal, foto_path, foto_obv, foto_rev, foto_detail,
             lembaga_grading, nomor_sertifikasi, grade_numerik, grading_url,
-            supplier_id, batch_id, perolehan, link_pembelian, tanggal_beli, status,
+            supplier_id, batch_id, group_id, perolehan, link_pembelian, tanggal_beli, status,
             qty, qty_terjual, harga, ongkir, hpp, hpp_per_pcs, harga_jual, status_koleksi,
             is_pecahan, parent_id, created_by
         ) VALUES (
@@ -194,7 +205,7 @@ def create_koleksi(
             ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
             ?, ?, ?, ?,
-            ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?, ?,
             ?, 0, ?, ?, ?, ?, ?, ?,
             0, NULL, ?
         )
@@ -206,7 +217,7 @@ def create_koleksi(
             payload.lokasi_simpan, payload.detail, payload.catatan_internal,
             foto_path, foto_obv, foto_rev, foto_detail,
             lembaga_grading, nomor_sertifikasi, grade_numerik, grading_url,
-            payload.supplier_id, payload.batch_id, payload.perolehan, payload.link_pembelian,
+            payload.supplier_id, payload.batch_id, payload.group_id, payload.perolehan, payload.link_pembelian,
             tanggal_beli, payload.status or "pesan", qty, payload.harga, payload.ongkir,
             hpp, hpp_per_pcs, payload.harga_jual, payload.status_koleksi or "stock_jual",
             current_user["id"]
@@ -215,7 +226,20 @@ def create_koleksi(
     conn.commit()
     new_id = cursor.lastrowid
 
-    cursor.execute("SELECT *, (qty - qty_terjual) as qty_tersisa FROM koleksi WHERE id = ?", (new_id,))
+    cursor.execute(
+        """
+        SELECT k.*, (k.qty - k.qty_terjual) as qty_tersisa,
+               s.nama as supplier_nama,
+               b.kode_batch as batch_kode,
+               g.nama_group as group_nama
+        FROM koleksi k
+        LEFT JOIN supplier s ON k.supplier_id = s.id
+        LEFT JOIN batch_pembelian b ON k.batch_id = b.id
+        LEFT JOIN group_item g ON k.group_id = g.id
+        WHERE k.id = ?
+        """,
+        (new_id,)
+    )
     created_item = dict(cursor.fetchone())
     return created_item
 
@@ -225,16 +249,18 @@ def get_koleksi_detail(
     conn: sqlite3.Connection = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Mendapatkan detail item koleksi lengkap dengan data supplier, batch, dan galeri foto."""
+    """Mendapatkan detail item koleksi lengkap dengan data supplier, batch, group, dan galeri foto."""
     cursor = conn.cursor()
     cursor.execute(
         """
         SELECT k.*, (k.qty - k.qty_terjual) as qty_tersisa,
                s.nama as supplier_nama, s.no_hp as supplier_no_hp,
-               b.kode_batch as batch_kode, b.nama_batch as batch_nama
+               b.kode_batch as batch_kode, b.nama_batch as batch_nama,
+               g.nama_group as group_nama
         FROM koleksi k
         LEFT JOIN supplier s ON k.supplier_id = s.id
         LEFT JOIN batch_pembelian b ON k.batch_id = b.id
+        LEFT JOIN group_item g ON k.group_id = g.id
         WHERE k.id = ?
         """,
         (koleksi_id,)
@@ -320,6 +346,7 @@ def update_koleksi(
         ("grading_url", payload.grading_url),
         ("supplier_id", payload.supplier_id),
         ("batch_id", payload.batch_id),
+        ("group_id", (payload.group_id if payload.group_id > 0 else None) if payload.group_id is not None else None),
         ("perolehan", payload.perolehan),
         ("link_pembelian", payload.link_pembelian),
         ("tanggal_beli", payload.tanggal_beli),
@@ -328,8 +355,13 @@ def update_koleksi(
         ("status_koleksi", payload.status_koleksi),
     ]
 
+    if payload.group_id is not None and payload.group_id > 0:
+        cursor.execute("SELECT id FROM group_item WHERE id = ?", (payload.group_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group item tidak ditemukan")
+
     for col, val in field_mappings:
-        if val is not None:
+        if val is not None or (col == "group_id" and payload.group_id is not None):
             updates.append(f"{col} = ?")
             params.append(val)
 
@@ -339,7 +371,20 @@ def update_koleksi(
         cursor.execute(f"UPDATE koleksi SET {', '.join(updates)} WHERE id = ?", tuple(params))
         conn.commit()
 
-    cursor.execute("SELECT *, (qty - qty_terjual) as qty_tersisa FROM koleksi WHERE id = ?", (koleksi_id,))
+    cursor.execute(
+        """
+        SELECT k.*, (k.qty - k.qty_terjual) as qty_tersisa,
+               s.nama as supplier_nama,
+               b.kode_batch as batch_kode,
+               g.nama_group as group_nama
+        FROM koleksi k
+        LEFT JOIN supplier s ON k.supplier_id = s.id
+        LEFT JOIN batch_pembelian b ON k.batch_id = b.id
+        LEFT JOIN group_item g ON k.group_id = g.id
+        WHERE k.id = ?
+        """,
+        (koleksi_id,)
+    )
     updated_item = dict(cursor.fetchone())
     return updated_item
 
@@ -505,13 +550,13 @@ def pecah_stok_koleksi(
         INSERT INTO koleksi (
             kode_item, nama_item, nomor_seri, tahun, denominasi, cetakan, grade, jenis, negara,
             bahan, warna_dominan, dimensi, kondisi_fisik, lokasi_simpan, detail,
-            catatan_internal, foto_path, foto_obv, foto_rev, supplier_id, batch_id, perolehan,
+            catatan_internal, foto_path, foto_obv, foto_rev, supplier_id, batch_id, group_id, perolehan,
             link_pembelian, tanggal_beli, status, qty, qty_terjual, harga, ongkir,
             hpp, hpp_per_pcs, harga_jual, status_koleksi, is_pecahan, parent_id, created_by
         ) VALUES (
             ?, ?, ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?, ?,
-            ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, 0, ?, ?,
             ?, ?, ?, ?, 1, ?, ?
         )
@@ -522,7 +567,7 @@ def pecah_stok_koleksi(
             parent_dict["bahan"], parent_dict["warna_dominan"], parent_dict["dimensi"], parent_dict["kondisi_fisik"],
             parent_dict["lokasi_simpan"], parent_dict["detail"], parent_dict["catatan_internal"],
             parent_dict["foto_path"], parent_dict.get("foto_obv"), parent_dict.get("foto_rev"),
-            parent_dict["supplier_id"], parent_dict["batch_id"], parent_dict["perolehan"], parent_dict["link_pembelian"],
+            parent_dict["supplier_id"], parent_dict["batch_id"], parent_dict.get("group_id"), parent_dict["perolehan"], parent_dict["link_pembelian"],
             parent_dict["tanggal_beli"], parent_dict["status"], payload.qty_pecahan, child_harga, child_ongkir,
             child_hpp, hpp_per_pcs, payload.harga_jual_pcs, payload.status_koleksi or "stock_jual",
             koleksi_id, current_user["id"]

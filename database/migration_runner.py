@@ -53,9 +53,31 @@ def migration_002_add_certification_and_photos(conn: sqlite3.Connection):
     )
     conn.commit()
 
+def migration_003_add_group_item(conn: sqlite3.Connection):
+    """Menambahkan tabel group_item dan relasi group_id pada tabel koleksi."""
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS group_item (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nama_group TEXT UNIQUE NOT NULL,
+            deskripsi TEXT,
+            created_by INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT (datetime('now','localtime')),
+            updated_at TEXT DEFAULT (datetime('now','localtime'))
+        )
+        """
+    )
+    cursor.execute("PRAGMA table_info(koleksi)")
+    cols = [row["name"] for row in cursor.fetchall()]
+    if "group_id" not in cols:
+        cursor.execute("ALTER TABLE koleksi ADD COLUMN group_id INTEGER REFERENCES group_item(id)")
+    conn.commit()
+
 MIGRATIONS: List[Tuple[str, str, Callable[[sqlite3.Connection], None]]] = [
     ("001_baseline", "Baseline schema tracking", migration_001_baseline),
     ("002_certification_and_photos", "Add grading certification fields and photo gallery table", migration_002_add_certification_and_photos),
+    ("003_add_group_item", "Add group_item master table and group_id relation in koleksi", migration_003_add_group_item),
 ]
 
 def run_migrations(conn: sqlite3.Connection):

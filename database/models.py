@@ -46,6 +46,16 @@ CREATE_TABLES_SQL = [
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS group_item (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nama_group TEXT UNIQUE NOT NULL,
+        deskripsi TEXT,
+        created_by INTEGER REFERENCES users(id),
+        created_at TEXT DEFAULT (datetime('now','localtime')),
+        updated_at TEXT DEFAULT (datetime('now','localtime'))
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS koleksi (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         kode_item TEXT UNIQUE,
@@ -69,6 +79,7 @@ CREATE_TABLES_SQL = [
         foto_rev TEXT,
         supplier_id INTEGER REFERENCES supplier(id),
         batch_id INTEGER REFERENCES batch_pembelian(id),
+        group_id INTEGER REFERENCES group_item(id),
         perolehan TEXT,
         link_pembelian TEXT,
         tanggal_beli TEXT,
@@ -206,6 +217,25 @@ class SupplierResponse(BaseModel):
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
+# Group Item Models
+class GroupItemCreate(BaseModel):
+    nama_group: str
+    deskripsi: Optional[str] = None
+
+class GroupItemUpdate(BaseModel):
+    nama_group: Optional[str] = None
+    deskripsi: Optional[str] = None
+
+class GroupItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    nama_group: str
+    deskripsi: Optional[str] = None
+    item_count: Optional[int] = 0
+    created_by: Optional[int] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
 # Batch Models
 class BatchCreate(BaseModel):
     nama_batch: Optional[str] = None
@@ -273,6 +303,7 @@ class KoleksiCreate(BaseModel):
     grading_url: Optional[str] = None
     supplier_id: Optional[int] = None
     batch_id: Optional[int] = None
+    group_id: Optional[int] = None
     perolehan: Optional[str] = None
     link_pembelian: Optional[str] = None
     tanggal_beli: Optional[str] = None
@@ -310,6 +341,7 @@ class KoleksiUpdate(BaseModel):
     grading_url: Optional[str] = None
     supplier_id: Optional[int] = None
     batch_id: Optional[int] = None
+    group_id: Optional[int] = None
     perolehan: Optional[str] = None
     link_pembelian: Optional[str] = None
     tanggal_beli: Optional[str] = None
@@ -366,6 +398,8 @@ class KoleksiResponse(BaseModel):
     supplier_nama: Optional[str] = None
     batch_id: Optional[int] = None
     batch_kode: Optional[str] = None
+    group_id: Optional[int] = None
+    group_nama: Optional[str] = None
     perolehan: Optional[str] = None
     link_pembelian: Optional[str] = None
     tanggal_beli: Optional[str] = None

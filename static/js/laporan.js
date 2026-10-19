@@ -60,15 +60,15 @@ async function loadLaporan() {
         <div class="filter-bar">
           <div style="display:flex; align-items:center; gap:8px;">
             <label style="font-size:12px; color:var(--text-secondary);">Dari:</label>
-            <input type="date" id="lapJualDari" class="form-control" style="width:160px;">
+            <input type="date" id="lapJualDari" class="form-control" style="width:160px;" onchange="loadLaporanPenjualan()">
           </div>
 
           <div style="display:flex; align-items:center; gap:8px;">
             <label style="font-size:12px; color:var(--text-secondary);">Sampai:</label>
-            <input type="date" id="lapJualSampai" class="form-control" style="width:160px;">
+            <input type="date" id="lapJualSampai" class="form-control" style="width:160px;" onchange="loadLaporanPenjualan()">
           </div>
 
-          <select id="lapJualPlatform" class="form-select" style="max-width:170px;">
+          <select id="lapJualPlatform" class="form-select" style="max-width:170px;" onchange="loadLaporanPenjualan()">
             <option value="">Semua Platform</option>
             ${PLATFORM_JUAL_OPTIONS.map(opt => `<option value="${opt}">${PLATFORM_LABELS[opt] || opt}</option>`).join('')}
           </select>
@@ -92,12 +92,12 @@ async function loadLaporan() {
         <div class="filter-bar">
           <div style="display:flex; align-items:center; gap:8px;">
             <label style="font-size:12px; color:var(--text-secondary);">Periode Dari:</label>
-            <input type="date" id="lapProfitDari" class="form-control" style="width:160px;">
+            <input type="date" id="lapProfitDari" class="form-control" style="width:160px;" onchange="loadLaporanProfit()">
           </div>
 
           <div style="display:flex; align-items:center; gap:8px;">
             <label style="font-size:12px; color:var(--text-secondary);">Sampai:</label>
-            <input type="date" id="lapProfitSampai" class="form-control" style="width:160px;">
+            <input type="date" id="lapProfitSampai" class="form-control" style="width:160px;" onchange="loadLaporanProfit()">
           </div>
 
           <button class="btn btn-secondary btn-sm" onclick="loadLaporanProfit()">Tampilkan</button>

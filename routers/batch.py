@@ -169,13 +169,14 @@ def get_batch_detail(
 
     cursor.execute(
         """
-        SELECT id, kode_item, nama_item, nomor_seri, tahun, denominasi, grade, jenis, negara,
-               status, qty, qty_terjual, (qty - qty_terjual) as qty_tersisa,
-               harga, ongkir, hpp, hpp_per_pcs, harga_jual, status_koleksi, foto_path, foto_obv, foto_rev,
-               tanggal_beli, detail
-        FROM koleksi
-        WHERE batch_id = ?
-        ORDER BY id ASC
+        SELECT k.id, k.kode_item, k.nama_item, k.nomor_seri, k.tahun, k.denominasi, k.grade, k.jenis, k.negara,
+               k.status, k.qty, k.qty_terjual, (k.qty - k.qty_terjual) as qty_tersisa,
+               k.harga, k.ongkir, k.hpp, k.hpp_per_pcs, k.harga_jual, k.status_koleksi, k.foto_path, k.foto_obv, k.foto_rev,
+               k.tanggal_beli, k.detail, k.group_id, g.nama_group as group_nama
+        FROM koleksi k
+        LEFT JOIN group_item g ON k.group_id = g.id
+        WHERE k.batch_id = ?
+        ORDER BY k.id ASC
         """,
         (batch_id,)
     )

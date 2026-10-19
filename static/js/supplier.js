@@ -27,6 +27,7 @@ async function loadSupplier(searchQuery = '') {
             class="form-control" 
             placeholder="Cari nama supplier, no HP, atau catatan..."
             value="${escapeHtml(searchQuery)}"
+            oninput="handleLiveSupplierSearch()"
             onkeydown="if(event.key==='Enter') applySupplierSearch()"
           >
         </div>
@@ -57,6 +58,10 @@ async function loadSupplier(searchQuery = '') {
     `;
   }
 }
+
+const handleLiveSupplierSearch = typeof debounce === 'function'
+  ? debounce(() => applySupplierSearch(), 300)
+  : () => applySupplierSearch();
 
 function applySupplierSearch() {
   const query = document.getElementById('supplierSearchInput')?.value.trim() || '';
@@ -265,8 +270,12 @@ async function saveSupplier(id = null) {
       showToast('Supplier baru berhasil disimpan!', 'success');
     }
     closeModal();
-    const query = document.getElementById('supplierSearchInput')?.value.trim() || '';
-    loadSupplier(query);
+    const query = document.getElementById('supplierLiveSearchInput')?.value.trim() || document.getElementById('supplierSearchInput')?.value.trim() || '';
+    if (document.getElementById('supplierTableContainerInsideTab')) {
+      loadSupplierListInsideTab(query);
+    } else {
+      loadSupplier(query);
+    }
   } catch (err) {
     showToast('Gagal menyimpan supplier: ' + err.message, 'error');
   }
@@ -280,8 +289,12 @@ async function deleteSupplier(id, nama) {
   try {
     await API.delete(`/supplier/${id}`);
     showToast(`Supplier ${nama} berhasil dihapus.`, 'success');
-    const query = document.getElementById('supplierSearchInput')?.value.trim() || '';
-    loadSupplier(query);
+    const query = document.getElementById('supplierLiveSearchInput')?.value.trim() || document.getElementById('supplierSearchInput')?.value.trim() || '';
+    if (document.getElementById('supplierTableContainerInsideTab')) {
+      loadSupplierListInsideTab(query);
+    } else {
+      loadSupplier(query);
+    }
   } catch (err) {
     showToast('Gagal menghapus supplier: ' + err.message, 'error');
   }

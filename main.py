@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from database.db import init_db
-from routers import auth, supplier, batch, koleksi, penjualan, laporan, album, backup
+from routers import auth, supplier, batch, koleksi, penjualan, laporan, album, backup, group_item
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -35,6 +35,7 @@ app.add_middleware(
 # Include Routers
 app.include_router(auth.router)
 app.include_router(supplier.router)
+app.include_router(group_item.router)
 app.include_router(batch.router)
 app.include_router(koleksi.router)
 app.include_router(penjualan.router)

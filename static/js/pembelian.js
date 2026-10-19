@@ -198,7 +198,13 @@ async function loadPembelianSingle() {
                 <span>🤝 Supplier & Status Kepemilikan</span>
               </h4>
 
-              <div class="data-grid-2">
+              <div class="data-grid-3">
+                <div class="form-group">
+                  <label class="form-label">Group Item</label>
+                  <select id="spGroupItem" class="form-select">
+                    <option value="">-- Tanpa Group --</option>
+                  </select>
+                </div>
                 <div class="form-group">
                   <label class="form-label">Supplier / Sumber</label>
                   <select id="spSupplier" class="form-select">
@@ -254,8 +260,9 @@ async function loadPembelianSingle() {
   const dateInput = document.getElementById('spTanggal');
   if (dateInput) dateInput.value = today;
 
-  // Load suppliers into dropdown
+  // Load suppliers and group items into dropdowns
   loadSuppliersIntoDropdown('spSupplier');
+  loadGroupItemsIntoDropdown('spGroupItem');
 
   // Drag and drop photo zone setup
 
@@ -404,6 +411,7 @@ async function submitSinglePurchase() {
   const ongkir = parseFloat(document.getElementById('spOngkir')?.value || '0');
   const hargaJual = parseFloat(document.getElementById('spHargaJual')?.value || '0');
   const supplierId = document.getElementById('spSupplier')?.value || null;
+  const groupId = document.getElementById('spGroupItem')?.value || null;
   const perolehan = document.getElementById('spPerolehan')?.value;
   const status = document.getElementById('spStatus')?.value;
   const statusKoleksi = document.getElementById('spStatusKoleksi')?.value;
@@ -442,6 +450,7 @@ async function submitSinglePurchase() {
     ongkir_alokasi: ongkir,
     harga_jual: hargaJual,
     supplier_id: supplierId ? parseInt(supplierId, 10) : null,
+    group_id: groupId ? parseInt(groupId, 10) : null,
     perolehan: perolehan,
     metode_perolehan: perolehan,
     status,
@@ -527,6 +536,7 @@ async function loadPembelianBatch() {
             class="form-control" 
             placeholder="Cari kode batch, nama lot, supplier..." 
             value="${escapeHtml(batchFilterState.search)}"
+            oninput="handleLiveBatchFilter()"
             onkeydown="if(event.key==='Enter') applyBatchFilter()"
           >
         </div>
@@ -603,6 +613,10 @@ function toggleBatchFilterBar(forceShow) {
   if (icon) icon.textContent = batchFilterState.isVisible ? '▲' : '🔍';
   if (text) text.textContent = batchFilterState.isVisible ? 'Tutup Filter' : 'Filter Bar';
 }
+
+const handleLiveBatchFilter = debounce(() => {
+  applyBatchFilter();
+}, 280);
 
 function applyBatchFilter() {
   const sInput = document.getElementById('batchFilterSearch');
@@ -1078,6 +1092,7 @@ function renderBatchItemRows(items, batchId) {
           </div>
           <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:2px;">
             ${it.nomor_seri ? `<span class="item-serial-compact" title="Nomor Seri">SN: ${escapeHtml(it.nomor_seri)}</span>` : ''}
+            ${it.group_nama ? `<span class="badge badge-group" style="font-size:10px; padding:1px 5px;">🗂️ ${escapeHtml(it.group_nama)}</span>` : ''}
             ${it.negara ? `<span style="font-size:10px; color:var(--text-muted);">${escapeHtml(it.negara)}</span>` : ''}
           </div>
           ${it.detail ? `<div style="font-size:10.5px; color:var(--text-secondary); margin-top:2px; font-style:italic;">"${escapeHtml(it.detail)}"</div>` : ''}
@@ -1275,7 +1290,7 @@ function showAddItemToBatchModal(batchId) {
 
   const body = `
     <form id="addBatchItemForm" onsubmit="event.preventDefault(); submitItemToBatch(${batchId});">
-      <div class="data-grid-2">
+      <div class="data-grid-3">
         <div class="form-group">
           <label class="form-label">Nama Item <span class="required">*</span></label>
           <input type="text" id="biNama" class="form-control" placeholder="cth: 50 Rupiah Komodo 1997 UNC" required>
@@ -1283,6 +1298,12 @@ function showAddItemToBatchModal(batchId) {
         <div class="form-group">
           <label class="form-label">Nomor Seri</label>
           <input type="text" id="biNomorSeri" class="form-control" placeholder="cth: ABC123456 / No Seri">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Group Item</label>
+          <select id="biGroupItem" class="form-select">
+            <option value="">-- Tanpa Group --</option>
+          </select>
         </div>
       </div>
 
@@ -1378,6 +1399,7 @@ function showAddItemToBatchModal(batchId) {
     size: 'lg'
   });
 
+  loadGroupItemsIntoDropdown('biGroupItem');
   calcBatchAddUnitHint();
 }
 
@@ -1432,6 +1454,7 @@ function handleBatchAddRevSelect(e) {
 async function submitItemToBatch(batchId) {
   const nama = document.getElementById('biNama')?.value.trim();
   const nomorSeri = document.getElementById('biNomorSeri')?.value.trim() || null;
+  const groupId = document.getElementById('biGroupItem')?.value || null;
   const jenis = document.getElementById('biJenis')?.value;
   const grade = document.getElementById('biGrade')?.value;
   const tahun = document.getElementById('biTahun')?.value.trim() || null;
@@ -1451,6 +1474,7 @@ async function submitItemToBatch(batchId) {
     batch_id: batchId,
     nama_item: nama,
     nomor_seri: nomorSeri,
+    group_id: groupId ? parseInt(groupId, 10) : null,
     jenis,
     grade,
     tahun,
@@ -1524,7 +1548,7 @@ async function showEditBatchItemModal(itemId, batchId) {
 
     const body = `
       <form id="editBatchItemForm" onsubmit="event.preventDefault(); submitUpdateBatchItem(${itemId}, ${batchId});">
-        <div class="data-grid-2">
+        <div class="data-grid-3">
           <div class="form-group">
             <label class="form-label">Nama Item <span class="required">*</span></label>
             <input type="text" id="ebiNama" class="form-control" value="${escapeHtml(item.nama_item)}" required>
@@ -1532,6 +1556,12 @@ async function showEditBatchItemModal(itemId, batchId) {
           <div class="form-group">
             <label class="form-label">Nomor Seri (Serial Number)</label>
             <input type="text" id="ebiNomorSeri" class="form-control" value="${escapeHtml(item.nomor_seri || '')}" placeholder="cth: ABC123456 / No Seri">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Group Item</label>
+            <select id="ebiGroupItem" class="form-select">
+              <option value="">-- Tanpa Group --</option>
+            </select>
           </div>
         </div>
 
@@ -1627,6 +1657,7 @@ async function showEditBatchItemModal(itemId, batchId) {
       size: 'lg'
     });
 
+    loadGroupItemsIntoDropdown('ebiGroupItem', item.group_id);
     calcBatchEditUnitHint();
   } catch (err) {
     showToast('Gagal memuat item batch: ' + err.message, 'error');
@@ -1684,6 +1715,7 @@ function handleBatchEditRevSelect(e) {
 async function submitUpdateBatchItem(itemId, batchId) {
   const nama = document.getElementById('ebiNama')?.value.trim();
   const nomorSeri = document.getElementById('ebiNomorSeri')?.value.trim() || null;
+  const groupId = document.getElementById('ebiGroupItem')?.value || null;
   const jenis = document.getElementById('ebiJenis')?.value;
   const grade = document.getElementById('ebiGrade')?.value;
   const tahun = document.getElementById('ebiTahun')?.value.trim() || null;
@@ -1702,6 +1734,7 @@ async function submitUpdateBatchItem(itemId, batchId) {
   const payload = {
     nama_item: nama,
     nomor_seri: nomorSeri,
+    group_id: groupId ? parseInt(groupId, 10) : 0,
     jenis,
     grade,
     tahun,

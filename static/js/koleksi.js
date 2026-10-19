@@ -18,6 +18,7 @@ async function loadKoleksi(page = 1) {
   let currentGrade = document.getElementById('filterGrade')?.value || '';
   let currentStatusKoleksi = document.getElementById('filterStatusKoleksi')?.value || '';
   let currentStatus = document.getElementById('filterStatus')?.value || '';
+  let currentGroup = document.getElementById('filterGroup')?.value || '';
 
   // Only render the wrapper if not yet present in DOM
   if (!tableContainer) {
@@ -48,11 +49,16 @@ async function loadKoleksi(page = 1) {
               class="form-control" 
               placeholder="Cari nama item, kode item, tahun, nomor seri..."
               value="${escapeHtml(currentSearch)}"
+              oninput="handleLiveKoleksiSearch()"
               onkeydown="if(event.key==='Enter') loadKoleksi(1)"
             >
           </div>
 
-          <select id="filterJenis" class="form-select" style="max-width:170px;" onchange="loadKoleksi(1)">
+          <select id="filterGroup" class="form-select" style="max-width:160px;" onchange="loadKoleksi(1)">
+            <option value="">Semua Group</option>
+          </select>
+
+          <select id="filterJenis" class="form-select" style="max-width:160px;" onchange="loadKoleksi(1)">
             <option value="">Semua Jenis</option>
             ${JENIS_OPTIONS.map(opt => `<option value="${opt}" ${opt === currentJenis ? 'selected' : ''}>${JENIS_LABELS[opt] || opt}</option>`).join('')}
           </select>
@@ -62,12 +68,12 @@ async function loadKoleksi(page = 1) {
             ${GRADE_OPTIONS.map(opt => `<option value="${opt}" ${opt === currentGrade ? 'selected' : ''}>${opt}</option>`).join('')}
           </select>
 
-          <select id="filterStatusKoleksi" class="form-select" style="max-width:170px;" onchange="loadKoleksi(1)">
+          <select id="filterStatusKoleksi" class="form-select" style="max-width:160px;" onchange="loadKoleksi(1)">
             <option value="">Semua Tujuan</option>
             ${STATUS_KOLEKSI_OPTIONS.map(opt => `<option value="${opt}" ${opt === currentStatusKoleksi ? 'selected' : ''}>${STATUS_KOLEKSI_LABELS[opt] || opt}</option>`).join('')}
           </select>
 
-          <select id="filterStatus" class="form-select" style="max-width:150px;" onchange="loadKoleksi(1)">
+          <select id="filterStatus" class="form-select" style="max-width:140px;" onchange="loadKoleksi(1)">
             <option value="">Semua Status</option>
             ${STATUS_OPTIONS.map(opt => `<option value="${opt}" ${opt === currentStatus ? 'selected' : ''}>${STATUS_LABELS[opt] || opt}</option>`).join('')}
           </select>
@@ -148,6 +154,9 @@ async function loadKoleksi(page = 1) {
         </div>
       </div>
     `;
+
+    // Load group items into filter dropdown
+    loadGroupItemsIntoDropdown('filterGroup', currentGroup, 'Semua Group');
   }
 
   renderLoading('koleksiTableContainer', 'Memuat katalog koleksi...');
@@ -168,6 +177,7 @@ async function loadKoleksi(page = 1) {
   params.append('page', page);
   params.append('limit', KOLEKSI_PAGE_LIMIT);
   if (currentSearch) params.append('search', currentSearch);
+  if (currentGroup) params.append('group_id', currentGroup);
   if (currentJenis) params.append('jenis', currentJenis);
   if (currentGrade) params.append('grade', currentGrade);
   if (currentStatusKoleksi) params.append('status_koleksi', currentStatusKoleksi);
@@ -199,6 +209,17 @@ async function loadKoleksi(page = 1) {
   }
 }
 
+const handleLiveKoleksiSearch = debounce(() => {
+  loadKoleksi(1);
+}, 280);
+
+function filterByGroupDirect(groupId) {
+  const el = document.getElementById('filterGroup');
+  if (el) {
+    el.value = String(groupId);
+  }
+  loadKoleksi(1);
+}
 
 function toggleAdvancedFilter() {
   const panel = document.getElementById('advancedFilterPanel');
@@ -246,6 +267,7 @@ function resetAllKoleksiFilters() {
 
 function resetKoleksiFilters() {
   const s = document.getElementById('filterSearch'); if (s) s.value = '';
+  const grp = document.getElementById('filterGroup'); if (grp) grp.value = '';
   const j = document.getElementById('filterJenis'); if (j) j.value = '';
   const g = document.getElementById('filterGrade'); if (g) g.value = '';
   const sk = document.getElementById('filterStatusKoleksi'); if (sk) sk.value = '';
@@ -341,6 +363,7 @@ function renderKoleksiTable(data, total, page) {
             <span style="font-weight:600; color:var(--text-primary); cursor:pointer;" onclick="showViewItemModal(${item.id})" title="Klik untuk lihat rincian">${escapeHtml(item.nama_item)}</span>
             ${hasPhoto ? `<span class="photo-indicator" title="Arahkan kursor untuk melihat foto depan/belakang" onclick="showViewItemModal(${item.id})">📷</span>` : ''}
           </div>
+          ${item.group_nama ? `<div style="margin-top:2px;"><span class="badge badge-group" style="font-size:10px; padding:1px 6px; cursor:pointer;" onclick="filterByGroupDirect(${item.group_id})" title="Filter group: ${escapeHtml(item.group_nama)}">🗂️ ${escapeHtml(item.group_nama)}</span></div>` : ''}
           ${photoTooltipHtml}
         </td>
         <td>
@@ -531,6 +554,11 @@ async function showViewItemModal(id) {
                     Single (Non-Batch)
                   </span>
                 `}
+                ${item.group_nama ? `
+                  <span class="badge badge-group" style="font-size:11.5px;">
+                    🗂️ ${escapeHtml(item.group_nama)}
+                  </span>
+                ` : ''}
                 ${formatGrade(item.grade)}
                 ${formatJenis(item.jenis)}
                 ${formatStatusKoleksi(item.status_koleksi)}
@@ -561,6 +589,10 @@ async function showViewItemModal(id) {
               <div>
                 <div style="font-size:11px; color:var(--text-muted);">Batch Pembelian</div>
                 <div style="font-weight:600; color:var(--text-primary); font-size:13px;">${escapeHtml(item.batch_kode || 'Pembelian Single')}</div>
+              </div>
+              <div>
+                <div style="font-size:11px; color:var(--text-muted);">Group Item</div>
+                <div style="font-weight:600; color:var(--text-primary); font-size:13px;">${item.group_nama ? `<span class="badge badge-group" style="font-size:11px;">🗂️ ${escapeHtml(item.group_nama)}</span>` : '<span style="color:var(--text-muted);">-</span>'}</div>
               </div>
               <div>
                 <div style="font-size:11px; color:var(--text-muted);">Negara &amp; Tahun</div>
@@ -713,7 +745,13 @@ async function showEditKoleksiModal(id) {
           </div>
         </div>
 
-        <div class="data-grid-3">
+        <div class="data-grid-4">
+          <div class="form-group">
+            <label class="form-label">Group Item / Seri</label>
+            <select id="ekGroupItem" class="form-select">
+              <option value="">Memuat group...</option>
+            </select>
+          </div>
           <div class="form-group">
             <label class="form-label">Negara</label>
             <input type="text" id="ekNegara" class="form-control" value="${escapeHtml(item.negara || 'Indonesia')}">
@@ -834,6 +872,9 @@ async function showEditKoleksiModal(id) {
       footer,
       size: 'lg'
     });
+
+    loadGroupItemsIntoDropdown('ekGroupItem', item.group_id, '-- Tanpa Group Item --');
+    calcEditUnitHint();
   } catch (err) {
     showToast('Gagal memuat item: ' + err.message, 'error');
   }
@@ -845,10 +886,13 @@ async function submitUpdateKoleksi(id) {
   const hargaBeli = parseFloat(document.getElementById('ekHargaBeli')?.value || '0');
   const ongkirVal = parseFloat(document.getElementById('ekOngkir')?.value || '0');
   const catatanVal = document.getElementById('ekCatatan')?.value.trim() || null;
+  const groupIdVal = document.getElementById('ekGroupItem')?.value;
+  const groupId = groupIdVal ? parseInt(groupIdVal, 10) : 0;
 
   const payload = {
     nama_item: document.getElementById('ekNama')?.value.trim(),
     nomor_seri: document.getElementById('ekNomorSeri')?.value.trim() || null,
+    group_id: groupId,
     negara: document.getElementById('ekNegara')?.value.trim(),
     tahun: document.getElementById('ekTahun')?.value.trim() || null,
     nominal: nominalVal,

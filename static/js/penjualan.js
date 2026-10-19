@@ -118,19 +118,29 @@ async function loadPenjualan(page = 1) {
         <h4>📋 Riwayat Transaksi Penjualan</h4>
       </div>
 
-      <!-- Filters Bar -->
-      <div class="filter-bar">
-        <div style="display:flex; align-items:center; gap:8px;">
+      <!-- Filters Bar with Live Filtering -->
+      <div class="filter-bar" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+        <div style="flex:1; min-width:200px;">
+          <input type="text" id="filterPenjualanSearch" class="form-control" placeholder="🔍 Cari item, kode jual, pembeli..." oninput="handleLivePenjualanFilter()">
+        </div>
+
+        <div style="width:170px;">
+          <select id="filterPenjualanPlatform" class="form-select" onchange="fetchPenjualanHistory(1)">
+            <option value="">Semua Platform</option>
+            ${PLATFORM_JUAL_OPTIONS.map(opt => `<option value="${opt}">${PLATFORM_LABELS[opt] || opt}</option>`).join('')}
+          </select>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:6px;">
           <label style="font-size:12px; color:var(--text-secondary);">Dari:</label>
-          <input type="date" id="filterPenjualanDari" class="form-control" style="width:160px;" value="${escapeHtml(fDari)}">
+          <input type="date" id="filterPenjualanDari" class="form-control" style="width:145px;" value="${escapeHtml(fDari)}" onchange="fetchPenjualanHistory(1)">
         </div>
 
-        <div style="display:flex; align-items:center; gap:8px;">
+        <div style="display:flex; align-items:center; gap:6px;">
           <label style="font-size:12px; color:var(--text-secondary);">Sampai:</label>
-          <input type="date" id="filterPenjualanSampai" class="form-control" style="width:160px;" value="${escapeHtml(fSampai)}">
+          <input type="date" id="filterPenjualanSampai" class="form-control" style="width:145px;" value="${escapeHtml(fSampai)}" onchange="fetchPenjualanHistory(1)">
         </div>
 
-        <button class="btn btn-secondary btn-sm" onclick="loadPenjualan(1)">Terapkan Filter</button>
         <button class="btn btn-secondary btn-sm" onclick="resetPenjualanFilter()">Reset</button>
       </div>
 
@@ -148,10 +158,16 @@ async function loadPenjualan(page = 1) {
   await fetchPenjualanHistory(page);
 }
 
+const handleLivePenjualanFilter = typeof debounce === 'function'
+  ? debounce(() => fetchPenjualanHistory(1), 300)
+  : () => fetchPenjualanHistory(1);
+
 function resetPenjualanFilter() {
+  const q = document.getElementById('filterPenjualanSearch'); if (q) q.value = '';
+  const p = document.getElementById('filterPenjualanPlatform'); if (p) p.value = '';
   const d = document.getElementById('filterPenjualanDari'); if (d) d.value = '';
   const s = document.getElementById('filterPenjualanSampai'); if (s) s.value = '';
-  loadPenjualan(1);
+  fetchPenjualanHistory(1);
 }
 
 async function loadKoleksiForSale() {
@@ -281,12 +297,16 @@ async function submitNewSale() {
 async function fetchPenjualanHistory(page = 1) {
   renderLoading('penjualanTableContainer', 'Memuat riwayat transaksi penjualan...');
 
+  const fSearch = document.getElementById('filterPenjualanSearch')?.value.trim() || '';
+  const fPlatform = document.getElementById('filterPenjualanPlatform')?.value || '';
   const fDari = document.getElementById('filterPenjualanDari')?.value || '';
   const fSampai = document.getElementById('filterPenjualanSampai')?.value || '';
 
   const params = new URLSearchParams();
   params.append('page', page);
   params.append('limit', PENJUALAN_PAGE_LIMIT);
+  if (fSearch) params.append('search', fSearch);
+  if (fPlatform) params.append('platform_jual', fPlatform);
   if (fDari) params.append('tanggal_dari', fDari);
   if (fSampai) params.append('tanggal_sampai', fSampai);
 

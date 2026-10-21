@@ -744,6 +744,9 @@ function renderBatchList(batches) {
         <td>${formatStatus(b.status)}</td>
         <td style="text-align:center;" onclick="event.stopPropagation()">
           <div class="td-actions" style="justify-content:center; gap:6px;">
+            <button class="btn btn-secondary btn-icon" onclick="showPrintBatchCrosscheckModal(${b.id})" title="Cetak / Ekspor PDF Lembar Crosscheck Batch">
+              🖨️
+            </button>
             <button class="btn btn-secondary btn-icon" onclick="showBatchDetailModal(${b.id})" title="Lihat Detail Lengkap Batch">
               👁️
             </button>
@@ -905,9 +908,14 @@ async function showBatchDetailModal(batchId) {
     const footer = `
       <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
         <button type="button" class="btn btn-secondary" onclick="closeModal()">Tutup</button>
-        <button type="button" class="btn btn-primary" onclick="closeModal(); selectBatch(${b.id});">
-          <span>📂 Buka &amp; Kelola Batch Ini</span>
-        </button>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn btn-secondary" onclick="showPrintBatchCrosscheckModal(${b.id})">
+            <span>🖨️ Cetak / Ekspor PDF</span>
+          </button>
+          <button type="button" class="btn btn-primary" onclick="closeModal(); selectBatch(${b.id});">
+            <span>📂 Buka &amp; Kelola Batch Ini</span>
+          </button>
+        </div>
       </div>
     `;
 
@@ -957,6 +965,9 @@ function renderBatchDetail(b) {
           <span>◀ Kembali ke Daftar Batch</span>
         </button>
         <div style="display:flex; gap:8px;">
+          <button class="btn btn-secondary btn-sm" onclick="showPrintBatchCrosscheckModal(${b.id})" title="Cetak / Ekspor PDF Lembar Crosscheck Batch">
+            🖨️ Cetak / Ekspor PDF Crosscheck
+          </button>
           <button class="btn btn-secondary btn-sm" onclick="recalculateBatchOngkir(${b.id})" title="Alokasikan total ongkir ke seluruh item proporsional">
             ⚡ Hitung Ulang Ongkir
           </button>
@@ -1771,5 +1782,239 @@ async function submitUpdateBatchItem(itemId, batchId) {
     selectBatch(batchId);
   } catch (err) {
     showToast('Gagal memperbarui item batch: ' + err.message, 'error');
+  }
+}
+
+/**
+ * ==============================================================================
+ * Fitur Cetak / Ekspor PDF Lembar Crosscheck Pembelian Batch
+ * ==============================================================================
+ */
+
+const BATCH_PRINT_AVAILABLE_COLUMNS = [
+  { id: 'checklist', label: 'Kotak Cek [ ✓ ]', default: true, desc: 'Kotak centang fisik untuk verifikasi fisik/unboxing' },
+  { id: 'no', label: 'No. Urut', default: true, desc: 'Nomor urutan item dalam lot' },
+  { id: 'foto', label: 'Thumbnail Foto', default: true, desc: 'Foto fisik item untuk identifikasi visual' },
+  { id: 'kode', label: 'Kode Item', default: true, desc: 'Kode inventaris internal (ITM-xxx)' },
+  { id: 'nama', label: 'Nama Item Koleksi', default: true, desc: 'Nama lengkap item numismatik' },
+  { id: 'group', label: 'Group / Seri', default: true, desc: 'Kategori / Seri pengelompokan item' },
+  { id: 'tahun', label: 'Tahun Emisi', default: true, desc: 'Tahun cetak atau emisi' },
+  { id: 'nominal', label: 'Nominal / Denominasi', default: false, desc: 'Nilai nominal pecahan mata uang' },
+  { id: 'jenis', label: 'Jenis Numismatik', default: true, desc: 'Uang Kertas, Koin, Polymer, dll.' },
+  { id: 'grade', label: 'Grade & Slab', default: true, desc: 'Grade kondisi & sertifikasi grading (PMG/PCGS/dll)' },
+  { id: 'nomor_seri', label: 'Nomor Seri', default: true, desc: 'Nomor seri uang kertas / sertifikat' },
+  { id: 'qty', label: 'Kuantitas (Qty)', default: true, desc: 'Jumlah lembar/keping item' },
+  { id: 'harga', label: 'Harga Beli Item', default: true, desc: 'Harga beli item satuan/alokasi' },
+  { id: 'ongkir', label: 'Alokasi Ongkir', default: true, desc: 'Porsi ongkir lot per item' },
+  { id: 'hpp', label: 'Total HPP Modal', default: true, desc: 'Total Harga Pokok Modal (HPP)' },
+  { id: 'status', label: 'Status Pesanan', default: false, desc: 'Status pesanan (pesan/dikirim/terima)' },
+  { id: 'kondisi', label: 'Kondisi / Lokasi Simpan', default: false, desc: 'Catatan kondisi fisik & lokasi simpan' },
+  { id: 'catatan', label: 'Catatan & Ruang Crosscheck', default: true, desc: 'Keterangan internal & baris manual catatan crosscheck' }
+];
+
+async function showPrintBatchCrosscheckModal(batchId) {
+  try {
+    let b = currentBatchData && currentBatchData.id === batchId ? currentBatchData : null;
+    if (!b) {
+      b = await API.get(`/batch/${batchId}`);
+    }
+    if (!b) throw new Error('Data batch tidak ditemukan');
+
+    const items = b.items || [];
+    const totalBeli = items.reduce((sum, it) => sum + Number(it.harga || it.harga_beli || 0), 0);
+    const totalOngkir = Number(b.total_ongkir || 0);
+    const totalHpp = totalBeli + totalOngkir;
+    const batchNama = b.nama_batch || b.kode_batch || `Batch #${b.id}`;
+
+    // Ambil preferensi kolom yang tersimpan di localStorage (jika ada)
+    let savedCols = null;
+    try {
+      const raw = localStorage.getItem('numis_batch_print_cols');
+      if (raw) savedCols = JSON.parse(raw);
+    } catch (_) {}
+
+    const savedOrientation = localStorage.getItem('numis_batch_print_orientation') || 'landscape';
+    const savedSummary = localStorage.getItem('numis_batch_print_summary') !== '0';
+    const savedSign = localStorage.getItem('numis_batch_print_signature') !== '0';
+
+    const body = `
+      <div class="batch-print-modal-content" style="display:flex; flex-direction:column; gap:16px;">
+        <!-- Header Ringkasan Batch -->
+        <div style="background:rgba(212,175,55,0.06); border:1px solid var(--border-gold); border-radius:8px; padding:12px 16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <div>
+              <div style="font-weight:700; color:var(--gold-light); font-size:14.5px;">
+                📦 ${escapeHtml(batchNama)}
+              </div>
+              <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
+                Kode: <strong style="font-family:monospace; color:var(--text-primary);">${escapeHtml(b.kode_batch || '#' + b.id)}</strong>
+                • Supplier: <strong style="color:var(--text-primary);">${escapeHtml(b.supplier_nama || '-')}</strong>
+                • Tgl Beli: <strong style="color:var(--text-primary);">${formatDate(b.tanggal_beli || b.created_at)}</strong>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <span class="badge" style="background:rgba(212,175,55,0.15); color:var(--gold-light); font-size:12px; padding:4px 10px;">
+                ${items.length} Item Koleksi
+              </span>
+              <div style="font-size:11.5px; color:var(--text-secondary); margin-top:3px;">
+                Total Modal: <strong style="color:var(--gold-primary);">${formatRupiah(totalHpp)}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Toolbar Pemilih Cepat Preset Kolom -->
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <label class="form-label" style="font-weight:700; color:var(--gold-light); margin:0;">
+              📋 Pilih Kolom yang Masuk di Lembar Cetak / PDF:
+            </label>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="setBatchPrintPreset('all')" style="font-size:11px; padding:3px 8px;">
+                Pilih Semua
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="setBatchPrintPreset('standard')" style="font-size:11px; padding:3px 8px;">
+                Standar Crosscheck
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="setBatchPrintPreset('physical')" style="font-size:11px; padding:3px 8px;">
+                Hanya Info Fisik
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="setBatchPrintPreset('finance')" style="font-size:11px; padding:3px 8px;">
+                Lengkap Finansial
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="setBatchPrintPreset('reset')" style="font-size:11px; padding:3px 8px;">
+                Reset
+              </button>
+            </div>
+          </div>
+
+          <!-- Grid Pilihan Kolom -->
+          <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap:8px; max-height:280px; overflow-y:auto; padding:4px 2px; border:1px solid var(--border); border-radius:8px; background:rgba(18,21,28,0.5);">
+            ${BATCH_PRINT_AVAILABLE_COLUMNS.map(col => {
+              const isChecked = Array.isArray(savedCols) ? savedCols.includes(col.id) : col.default;
+              return `
+                <label style="display:flex; align-items:flex-start; gap:8px; padding:8px 10px; background:rgba(26,30,40,0.85); border:1px solid var(--border); border-radius:6px; cursor:pointer; transition:all 0.15s ease;" onmouseover="this.style.borderColor='var(--gold-primary)'" onmouseout="this.style.borderColor='var(--border)'">
+                  <input type="checkbox" id="chkCol_${col.id}" value="${col.id}" class="batch-col-checkbox" ${isChecked ? 'checked' : ''} style="margin-top:2px; accent-color:var(--gold-primary); cursor:pointer;">
+                  <div style="flex:1;">
+                    <div style="font-size:12px; font-weight:700; color:var(--text-primary);">${escapeHtml(col.label)}</div>
+                    <div style="font-size:10.5px; color:var(--text-muted); line-height:1.2; margin-top:2px;">${escapeHtml(col.desc)}</div>
+                  </div>
+                </label>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- Pengaturan Tata Letak Dokumen -->
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
+          <div style="font-size:12px; font-weight:700; color:var(--gold-light); margin-bottom:10px;">
+            ⚙️ Pengaturan Kertas &amp; Dokumen:
+          </div>
+          <div class="data-grid-3" style="gap:14px; align-items:center;">
+            <div>
+              <label class="form-label" style="font-size:11.5px; margin-bottom:6px;">Orientasi Kertas Cetak / PDF</label>
+              <div style="display:flex; gap:12px;">
+                <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;">
+                  <input type="radio" name="batchPrintOrientation" value="landscape" ${savedOrientation === 'landscape' ? 'checked' : ''} style="accent-color:var(--gold-primary);">
+                  <span>Landscape (Mendatar) ⭐</span>
+                </label>
+                <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;">
+                  <input type="radio" name="batchPrintOrientation" value="portrait" ${savedOrientation === 'portrait' ? 'checked' : ''} style="accent-color:var(--gold-primary);">
+                  <span>Portrait (Tegak)</span>
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <label class="form-label" style="font-size:11.5px; margin-bottom:6px;">Elemen Tambahan</label>
+              <div style="display:flex; flex-direction:column; gap:6px;">
+                <label style="display:flex; align-items:center; gap:6px; font-size:11.5px; cursor:pointer;">
+                  <input type="checkbox" id="batchPrintShowSummary" ${savedSummary ? 'checked' : ''} style="accent-color:var(--gold-primary);">
+                  <span>Tampilkan Ringkasan Header &amp; Biaya</span>
+                </label>
+                <label style="display:flex; align-items:center; gap:6px; font-size:11.5px; cursor:pointer;">
+                  <input type="checkbox" id="batchPrintShowSignature" ${savedSign ? 'checked' : ''} style="accent-color:var(--gold-primary);">
+                  <span>Tampilkan Area Tanda Tangan &amp; Verifikasi</span>
+                </label>
+              </div>
+            </div>
+
+            <div style="background:rgba(212,175,55,0.08); border:1px dashed var(--border-gold); border-radius:6px; padding:8px 10px; font-size:11px; color:var(--text-secondary); line-height:1.35;">
+              💡 <strong>Tips Cetak / PDF:</strong><br>
+              Saat jendela dokumen terbuka, tekan tombol <strong>Cetak / Simpan PDF</strong> dan pilih printer fisik atau opsi <em>"Save as PDF"</em> di browser.
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const footer = `
+      <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Batal</button>
+        <button type="button" class="btn btn-primary" onclick="executeBatchCrosscheckPrint(${batchId})" style="display:flex; align-items:center; gap:6px;">
+          <span>🖨️ Buka &amp; Cetak Dokumen PDF</span>
+        </button>
+      </div>
+    `;
+
+    openModal({
+      title: `🖨️ Cetak / Ekspor PDF Crosscheck: ${escapeHtml(batchNama)}`,
+      body: body,
+      footer: footer,
+      size: 'lg'
+    });
+  } catch (err) {
+    showToast('Gagal memuat konfigurasi cetak batch: ' + err.message, 'error');
+  }
+}
+
+function setBatchPrintPreset(preset) {
+  const checkboxes = document.querySelectorAll('.batch-col-checkbox');
+  if (!checkboxes || checkboxes.length === 0) return;
+
+  const presetMap = {
+    all: ['checklist', 'no', 'foto', 'kode', 'nama', 'group', 'tahun', 'nominal', 'jenis', 'grade', 'nomor_seri', 'qty', 'harga', 'ongkir', 'hpp', 'status', 'kondisi', 'catatan'],
+    standard: ['checklist', 'no', 'foto', 'kode', 'nama', 'group', 'tahun', 'grade', 'qty', 'harga', 'ongkir', 'hpp', 'catatan'],
+    physical: ['checklist', 'no', 'foto', 'kode', 'nama', 'group', 'tahun', 'nominal', 'jenis', 'grade', 'nomor_seri', 'qty', 'kondisi', 'catatan'],
+    finance: ['checklist', 'no', 'kode', 'nama', 'group', 'grade', 'qty', 'harga', 'ongkir', 'hpp', 'catatan'],
+    reset: ['checklist', 'no', 'foto', 'kode', 'nama', 'group', 'tahun', 'grade', 'nomor_seri', 'qty', 'harga', 'ongkir', 'hpp', 'catatan']
+  };
+
+  const targets = presetMap[preset] || presetMap.standard;
+  checkboxes.forEach(chk => {
+    chk.checked = targets.includes(chk.value);
+  });
+}
+
+function executeBatchCrosscheckPrint(batchId) {
+  const checkboxes = document.querySelectorAll('.batch-col-checkbox:checked');
+  if (!checkboxes || checkboxes.length === 0) {
+    showToast('Pilih minimal satu kolom untuk lembar cetak!', 'warning');
+    return;
+  }
+
+  const selectedCols = Array.from(checkboxes).map(c => c.value);
+  const orientationInput = document.querySelector('input[name="batchPrintOrientation"]:checked');
+  const orientation = orientationInput ? orientationInput.value : 'landscape';
+  const showSummary = document.getElementById('batchPrintShowSummary')?.checked ? '1' : '0';
+  const showSignature = document.getElementById('batchPrintShowSignature')?.checked ? '1' : '0';
+
+  // Simpan preferensi ke localStorage
+  try {
+    localStorage.setItem('numis_batch_print_cols', JSON.stringify(selectedCols));
+    localStorage.setItem('numis_batch_print_orientation', orientation);
+    localStorage.setItem('numis_batch_print_summary', showSummary);
+    localStorage.setItem('numis_batch_print_signature', showSignature);
+  } catch (_) {}
+
+  const token = API.getToken() || '';
+  const colsParam = encodeURIComponent(selectedCols.join(','));
+  const url = `/api/batch/${batchId}/print-crosscheck?cols=${colsParam}&orientation=${orientation}&show_summary=${showSummary}&show_signature=${showSignature}&token=${encodeURIComponent(token)}`;
+
+  const win = window.open(url, '_blank');
+  if (!win) {
+    showToast('Pop-up jendela cetak diblokir oleh browser. Harap izinkan pop-up.', 'warning');
+  } else {
+    closeModal();
   }
 }

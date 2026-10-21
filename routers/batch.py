@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse
 import sqlite3
 from database.db import get_db
 from database.models import BatchCreate, BatchUpdate, BatchResponse
-from utils.auth_utils import get_current_user
+from utils.auth_utils import get_current_user, get_optional_user
 from utils.calculations import calculate_hpp_batch
 
 router = APIRouter(prefix="/api/batch", tags=["Batch Pembelian"])
@@ -441,9 +441,7 @@ def print_batch_crosscheck_html(
     orientation: str = Query("landscape", description="Orientasi halaman (landscape / portrait)"),
     show_summary: int = Query(1, description="Tampilkan ringkasan keuangan"),
     show_signature: int = Query(1, description="Tampilkan form tanda tangan & verifikasi"),
-    token: Optional[str] = Query(None, description="Auth Token"),
-    conn: sqlite3.Connection = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    conn: sqlite3.Connection = Depends(get_db)
 ):
     """Menghasilkan lembar siap cetak / ekspor ke PDF untuk crosscheck verifikasi fisik item batch."""
     cursor = conn.cursor()

@@ -97,6 +97,30 @@ def get_current_user(
     finally:
         conn.close()
 
+def get_optional_user(
+    header_token: Optional[str] = Depends(oauth2_scheme),
+    query_token: Optional[str] = Query(None, alias="token")
+) -> Optional[Dict[str, Any]]:
+    """Dependency fleksibel: mengambil data user jika ada token valid, atau None jika tanpa token."""
+    token = header_token or query_token
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if not username:
+            return None
+        conn = get_db_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, username, email, full_name, role, is_active FROM users WHERE username = ?", (username,))
+            user = cursor.fetchone()
+            return dict(user) if user else None
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
 def require_admin(current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
     """Dependency untuk memverifikasi hak akses administrator."""
     if current_user.get("role") != "admin":

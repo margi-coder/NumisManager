@@ -34,7 +34,7 @@ def list_batches(
     page: int = Query(1, ge=1, description="Nomor halaman"),
     limit: int = Query(100, ge=1, le=500, description="Jumlah data per halaman"),
     status: Optional[str] = Query(None, description="Filter status batch (pesan/dikirim/terima)"),
-    is_final_ok: Optional[int] = Query(None, description="Filter status final kelengkapan batch (1=Final OK, 0=Kurang/Belum Lengkap)"),
+    is_final_ok: Optional[str] = Query(None, description="Filter status final kelengkapan batch (1=Final OK, 0=Kurang/Belum Lengkap, belum_terima=Pesan/Dikirim)"),
     perolehan: Optional[str] = Query(None, description="Filter metode perolehan"),
     search: Optional[str] = Query(None, description="Pencarian nama batch, kode batch, atau supplier"),
     conn: sqlite3.Connection = Depends(get_db),
@@ -48,9 +48,14 @@ def list_batches(
     if status:
         where_clauses.append("b.status = ?")
         params.append(status)
-    if is_final_ok is not None:
-        where_clauses.append("COALESCE(b.is_final_ok, 0) = ?")
-        params.append(int(is_final_ok))
+    if is_final_ok is not None and str(is_final_ok).strip() != "":
+        f_val = str(is_final_ok).strip().lower()
+        if f_val in ("1", "ok"):
+            where_clauses.append("(b.status = 'terima' AND COALESCE(b.is_final_ok, 0) = 1)")
+        elif f_val in ("0", "kurang"):
+            where_clauses.append("(b.status = 'terima' AND COALESCE(b.is_final_ok, 0) = 0)")
+        elif f_val == "belum_terima":
+            where_clauses.append("b.status != 'terima'")
     if perolehan:
         where_clauses.append("b.perolehan = ?")
         params.append(perolehan)
@@ -254,10 +259,22 @@ def update_batch(
         updates.append("catatan = ?")
         params.append(payload.catatan)
 
+    effective_status = payload.status if payload.status is not None else batch["status"]
+    if effective_status != "terima":
+        # Jika status batch bukan 'terima', nonaktifkan/reset is_final_ok dan checklist item
+        if "is_final_ok = ?" not in updates:
+            updates.append("is_final_ok = ?")
+            params.append(0)
+        else:
+            idx = updates.index("is_final_ok = ?")
+            params[idx] = 0
+
     if updates:
         updates.append("updated_at = datetime('now','localtime')")
         params.append(batch_id)
         cursor.execute(f"UPDATE batch_pembelian SET {', '.join(updates)} WHERE id = ?", tuple(params))
+        if effective_status != "terima":
+            cursor.execute("UPDATE koleksi SET is_checked = 0, updated_at = datetime('now','localtime') WHERE batch_id = ?", (batch_id,))
         conn.commit()
 
     # Jika ongkir berubah, hitung ulang HPP semua item dalam batch
@@ -411,6 +428,13 @@ def toggle_batch_item_check(
 ):
     """Mencentang atau membatalkan centang checklist verifikasi item koleksi di dalam batch langsung dari web."""
     cursor = conn.cursor()
+    cursor.execute("SELECT id, status FROM batch_pembelian WHERE id = ?", (batch_id,))
+    batch = cursor.fetchone()
+    if not batch:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch tidak ditemukan")
+    if batch["status"] != "terima":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Fitur checklist item hanya aktif ketika status pengiriman Batch adalah DITERIMA")
+
     cursor.execute("SELECT id, is_checked FROM koleksi WHERE id = ? AND batch_id = ?", (item_id, batch_id))
     item = cursor.fetchone()
     if not item:
@@ -430,6 +454,10 @@ def toggle_batch_item_check(
     checked_cnt = stats["checked_cnt"] or 0
     all_checked = (total_cnt > 0 and checked_cnt == total_cnt)
 
+    # Sinkronkan status Final OK berdasarkan kelengkapan seluruh item
+    new_final_ok = 1 if all_checked else 0
+    cursor.execute("UPDATE batch_pembelian SET is_final_ok = ?, updated_at = datetime('now','localtime') WHERE id = ?", (new_final_ok, batch_id))
+
     conn.commit()
 
     return {
@@ -438,7 +466,8 @@ def toggle_batch_item_check(
         "is_checked": new_val,
         "total_items": total_cnt,
         "checked_items": checked_cnt,
-        "all_checked": all_checked
+        "all_checked": all_checked,
+        "is_final_ok": new_final_ok
     }
 
 @router.post("/{batch_id}/check-all-items")
@@ -450,9 +479,12 @@ def check_all_batch_items(
 ):
     """Mencentang atau membatalkan seluruh checklist item dalam batch sekaligus."""
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM batch_pembelian WHERE id = ?", (batch_id,))
-    if not cursor.fetchone():
+    cursor.execute("SELECT id, status FROM batch_pembelian WHERE id = ?", (batch_id,))
+    batch = cursor.fetchone()
+    if not batch:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch tidak ditemukan")
+    if batch["status"] != "terima":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Fitur checklist item hanya aktif ketika status pengiriman Batch adalah DITERIMA")
 
     check_val = 1
     if payload:
@@ -491,10 +523,12 @@ def toggle_batch_final_ok(
 ):
     """Mengubah status Final OK (Barang Lengkap) pada batch pembelian."""
     cursor = conn.cursor()
-    cursor.execute("SELECT id, is_final_ok FROM batch_pembelian WHERE id = ?", (batch_id,))
+    cursor.execute("SELECT id, status, is_final_ok FROM batch_pembelian WHERE id = ?", (batch_id,))
     batch = cursor.fetchone()
     if not batch:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch tidak ditemukan")
+    if batch["status"] != "terima":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Fitur Final OK hanya aktif ketika status pengiriman Batch adalah DITERIMA")
 
     if payload and "is_final_ok" in payload:
         new_val = 1 if payload["is_final_ok"] else 0

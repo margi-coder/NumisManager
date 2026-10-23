@@ -549,10 +549,11 @@ async function loadPembelianBatch() {
           <option value="terima" ${batchFilterState.status === 'terima' ? 'selected' : ''}>Diterima</option>
         </select>
 
-        <select id="batchFilterStatusFinal" class="form-select" style="max-width:215px;" onchange="applyBatchFilter()">
+        <select id="batchFilterStatusFinal" class="form-select" style="max-width:235px;" onchange="applyBatchFilter()">
           <option value="">Semua Status Final</option>
-          <option value="1" ${batchFilterState.statusFinal === '1' ? 'selected' : ''}>✅ Final OK (Lengkap)</option>
-          <option value="0" ${batchFilterState.statusFinal === '0' ? 'selected' : ''}>⚠️ Kurang / Belum Lengkap</option>
+          <option value="1" ${batchFilterState.statusFinal === '1' ? 'selected' : ''}>✅ Diterima - Final OK (Lengkap)</option>
+          <option value="0" ${batchFilterState.statusFinal === '0' ? 'selected' : ''}>⚠️ Diterima - Kurang / Belum Lengkap</option>
+          <option value="belum_terima" ${batchFilterState.statusFinal === 'belum_terima' ? 'selected' : ''}>⏳ Belum Diterima (Pesan / Dikirim)</option>
         </select>
 
         <select id="batchFilterPerolehan" class="form-select" style="max-width:175px;" onchange="applyBatchFilter()">
@@ -686,7 +687,13 @@ async function refreshBatchList() {
       batches = batches.filter(b => b.status === batchFilterState.status);
     }
     if (batchFilterState.statusFinal !== '') {
-      batches = batches.filter(b => Number(b.is_final_ok ? 1 : 0) === Number(batchFilterState.statusFinal));
+      if (batchFilterState.statusFinal === '1') {
+        batches = batches.filter(b => b.status === 'terima' && Number(b.is_final_ok ? 1 : 0) === 1);
+      } else if (batchFilterState.statusFinal === '0') {
+        batches = batches.filter(b => b.status === 'terima' && Number(b.is_final_ok ? 1 : 0) === 0);
+      } else if (batchFilterState.statusFinal === 'belum_terima') {
+        batches = batches.filter(b => b.status !== 'terima');
+      }
     }
     if (batchFilterState.perolehan) {
       batches = batches.filter(b => b.perolehan === batchFilterState.perolehan);
@@ -749,22 +756,33 @@ function renderBatchList(batches) {
   batches.forEach(b => {
     const batchTitle = b.nama_batch || b.nama || b.kode_batch || ('Batch #' + b.id);
     const itemCount = b.item_count ?? (b.items?.length ?? 0);
+    const isReceived = (b.status === 'terima');
+    const isFinalOk = isReceived && Boolean(b.is_final_ok);
+
+    let statusSymbolHtml = '';
+    if (b.status === 'pesan') {
+      statusSymbolHtml = '<span title="Status Pemesanan: Masih Dipesan (Belum Diterima)" style="font-size:14px; line-height:1; flex-shrink:0;">⏳</span>';
+    } else if (b.status === 'dikirim') {
+      statusSymbolHtml = '<span title="Status Pengiriman: Sedang Dikirim (Belum Diterima)" style="font-size:14px; line-height:1; flex-shrink:0;">🚚</span>';
+    } else if (isFinalOk) {
+      statusSymbolHtml = '<span title="Diterima Lengkap (Final OK)" style="font-size:14px; line-height:1; flex-shrink:0;">✅</span>';
+    } else {
+      statusSymbolHtml = '<span title="Diterima - Ada Item Kurang / Belum Lengkap" style="font-size:14px; line-height:1; flex-shrink:0;">⚠️</span>';
+    }
 
     html += `
-      <tr style="cursor:pointer; ${b.is_final_ok ? 'background: rgba(46,125,50,0.06);' : ''}" onclick="selectBatch(${b.id})" title="Klik untuk membuka &amp; mengelola batch ini">
+      <tr style="cursor:pointer; ${isFinalOk ? 'background: rgba(46,125,50,0.06);' : ''}" onclick="selectBatch(${b.id})" title="Klik untuk membuka &amp; mengelola batch ini">
         <td><strong style="color:var(--gold-light); font-family:monospace;">${escapeHtml(b.kode_batch || '#' + b.id)}</strong></td>
         <td>
           <div style="display:flex; align-items:center; gap:7px;">
-            ${b.is_final_ok
-              ? '<span title="Final OK (Barang Lengkap)" style="font-size:14px; line-height:1; flex-shrink:0;">✅</span>'
-              : '<span title="Kurang / Belum Lengkap" style="font-size:14px; line-height:1; flex-shrink:0;">⚠️</span>'}
+            ${statusSymbolHtml}
             <strong style="color:var(--text-primary); font-size:13px;">${escapeHtml(batchTitle)}</strong>
           </div>
         </td>
         <td>${formatDate(b.tanggal_beli || b.created_at)}</td>
         <td style="text-align:center;">
           <span class="badge" style="background:rgba(212,175,55,0.12); color:var(--gold-light); font-weight:600;">${itemCount} item</span>
-          ${(b.checked_item_count !== undefined && b.checked_item_count > 0) ? `<div style="font-size:11px; color:#4caf50; font-weight:600; margin-top:2px;" title="Jumlah item yang sudah dichecklist dari web">✓ ${b.checked_item_count}/${itemCount} dicek</div>` : ''}
+          ${(isReceived && b.checked_item_count !== undefined && b.checked_item_count > 0) ? `<div style="font-size:11px; color:#4caf50; font-weight:600; margin-top:2px;" title="Jumlah item yang sudah dichecklist dari web">✓ ${b.checked_item_count}/${itemCount} dicek</div>` : ''}
         </td>
         <td style="color:var(--gold-light); font-weight:600;">${formatRupiah(b.total_ongkir || 0)}</td>
         <td>${formatStatus(b.status)}</td>
@@ -863,9 +881,11 @@ async function showBatchDetailModal(batchId) {
                 <span style="font-size:11px; color:var(--text-secondary); display:block;">Status Batch</span>
                 <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                   ${formatStatus(b.status)}
-                  ${b.is_final_ok
-                    ? '<span class="badge" style="background:rgba(46,125,50,0.22); color:#4caf50; border:1px solid #4caf50; font-weight:700; font-size:11px;">✅ Final OK (Barang Lengkap)</span>'
-                    : '<span class="badge" style="background:rgba(232,168,56,0.16); color:var(--warning); border:1px solid rgba(232,168,56,0.5); font-weight:700; font-size:11px;">⚠️ Kurang / Belum Lengkap</span>'}
+                  ${b.status !== 'terima'
+                    ? `<span class="badge" style="background:rgba(91,156,240,0.14); color:var(--info); border:1px solid rgba(91,156,240,0.35); font-weight:600; font-size:11px;">${b.status === 'dikirim' ? '🚚 Sedang Dikirim (Checklist Nonaktif)' : '⏳ Masih Dipesan (Checklist Nonaktif)'}</span>`
+                    : (b.is_final_ok
+                        ? '<span class="badge" style="background:rgba(46,125,50,0.22); color:#4caf50; border:1px solid #4caf50; font-weight:700; font-size:11px;">✅ Final OK (Barang Lengkap)</span>'
+                        : '<span class="badge" style="background:rgba(232,168,56,0.16); color:var(--warning); border:1px solid rgba(232,168,56,0.5); font-weight:700; font-size:11px;">⚠️ Kurang / Belum Lengkap</span>')}
                 </div>
               </div>
               <div>
@@ -992,6 +1012,29 @@ function renderBatchDetail(b) {
   const totalHpp = totalBeli + totalOngkir;
 
   const batchNama = b.nama_batch || b.nama || 'Batch';
+  const isReceived = (b.status === 'terima');
+  const isFinalOk = isReceived && Boolean(b.is_final_ok);
+
+  let headerBadgeHtml = '';
+  if (!isReceived) {
+    headerBadgeHtml = `
+      <span id="batchFinalStatusBadge" class="badge" style="background:rgba(91,156,240,0.14); color:var(--info); border:1px solid rgba(91,156,240,0.35); font-weight:700; font-size:11.5px; padding:3px 9px;">
+        ${b.status === 'dikirim' ? '🚚 SEDANG DIKIRIM (BELUM DITERIMA)' : '⏳ MASIH DIPESAN (BELUM DITERIMA)'}
+      </span>
+    `;
+  } else if (isFinalOk) {
+    headerBadgeHtml = `
+      <span id="batchFinalStatusBadge" class="badge" style="background:rgba(46,125,50,0.22); color:#4caf50; border:1px solid #4caf50; font-weight:700; font-size:11.5px; padding:3px 9px;">
+        ✅ FINAL OK (BARANG LENGKAP)
+      </span>
+    `;
+  } else {
+    headerBadgeHtml = `
+      <span id="batchFinalStatusBadge" class="badge" style="background:rgba(232,168,56,0.16); color:var(--warning); border:1px solid rgba(232,168,56,0.5); font-weight:700; font-size:11.5px; padding:3px 9px;">
+        ⚠️ KURANG / BELUM LENGKAP
+      </span>
+    `;
+  }
 
   mainView.innerHTML = `
     <div style="display:flex; flex-direction:column; gap:18px;">
@@ -1019,13 +1062,11 @@ function renderBatchDetail(b) {
           <h4 style="color:var(--gold-light); font-size:15px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:0;">
             <span>📦 ${escapeHtml(batchNama)}</span>
             <span style="font-size:12px; color:var(--text-muted); font-weight:400;">(${escapeHtml(b.kode_batch || '#' + b.id)})</span>
-            <span id="batchFinalStatusBadge" class="badge" style="${b.is_final_ok ? 'background:rgba(46,125,50,0.22); color:#4caf50; border:1px solid #4caf50;' : 'background:rgba(232,168,56,0.16); color:var(--warning); border:1px solid rgba(232,168,56,0.5);'} font-weight:700; font-size:11.5px; padding:3px 9px;">
-              ${b.is_final_ok ? '✅ FINAL OK (BARANG LENGKAP)' : '⚠️ KURANG / BELUM LENGKAP'}
-            </span>
-            <label id="bhFinalOkLabel" for="bhIsFinalOk" style="display:inline-flex; flex-direction:row; align-items:center; gap:7px; cursor:pointer; padding:3px 10px; border-radius:6px; background:${b.is_final_ok ? 'rgba(46,125,50,0.12)' : 'rgba(255,255,255,0.04)'}; border:1px solid ${b.is_final_ok ? 'rgba(76,175,80,0.4)' : 'var(--border)'}; font-size:12px; font-weight:600; color:var(--text-primary); user-select:none;" title="Centang jika seluruh isi lot telah diverifikasi fisik lengkap">
-              <input type="checkbox" id="bhIsFinalOk" ${b.is_final_ok ? 'checked' : ''}
+            ${headerBadgeHtml}
+            <label id="bhFinalOkLabel" for="bhIsFinalOk" style="display:inline-flex; flex-direction:row; align-items:center; gap:7px; padding:3px 10px; border-radius:6px; background:${isFinalOk ? 'rgba(46,125,50,0.12)' : 'rgba(255,255,255,0.04)'}; border:1px solid ${isFinalOk ? 'rgba(76,175,80,0.4)' : 'var(--border)'}; font-size:12px; font-weight:600; color:var(--text-primary); user-select:none; ${!isReceived ? 'opacity:0.45; cursor:not-allowed;' : 'cursor:pointer;'}" title="${!isReceived ? 'Fitur Final OK hanya aktif jika Status Batch adalah DITERIMA' : 'Centang jika seluruh isi lot telah diverifikasi fisik lengkap'}">
+              <input type="checkbox" id="bhIsFinalOk" ${isFinalOk ? 'checked' : ''} ${!isReceived ? 'disabled' : ''}
                      onchange="toggleBatchFinalOk(${b.id}, this.checked ? 1 : 0)"
-                     style="width:15px; height:15px; cursor:pointer; accent-color:#4caf50; margin:0; flex-shrink:0;">
+                     style="width:15px; height:15px; accent-color:#4caf50; margin:0; flex-shrink:0; ${!isReceived ? 'cursor:not-allowed;' : 'cursor:pointer;'}">
               <span>Tandai Final OK (Barang Lengkap)</span>
             </label>
           </h4>
@@ -1079,7 +1120,9 @@ function renderBatchDetail(b) {
             <h4 style="font-size:15px; color:var(--text-primary);">Item dalam Batch (${items.length})</h4>
             <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
               Total Beli: <strong>${formatRupiah(totalBeli)}</strong> | Total HPP: <strong style="color:var(--gold-light);">${formatRupiah(totalHpp)}</strong>
-              ${items.length > 0 ? ` | Dicek: <strong style="color:#4caf50;">✓ ${items.filter(it => Number(it.is_checked) === 1).length}/${items.length}</strong>` : ''}
+              ${!isReceived
+                ? ' | <span style="color:var(--info);">🔒 Fitur checklist aktif saat Status Batch = Diterima</span>'
+                : (items.length > 0 ? ` | Dicek: <strong style="color:#4caf50;">✓ ${items.filter(it => Number(it.is_checked) === 1).length}/${items.length}</strong>` : '')}
             </div>
           </div>
           <button type="button" class="btn btn-primary btn-sm" onclick="showAddItemToBatchModal(${b.id})">
@@ -1091,13 +1134,13 @@ function renderBatchDetail(b) {
           <table>
             <thead>
               <tr>
-                <th style="width:45px; text-align:center;" title="Checklist / Batal Cek Semua Item">
+                <th style="width:45px; text-align:center;" title="${!isReceived ? 'Checklist item hanya aktif jika Status Batch adalah DITERIMA' : 'Checklist / Batal Cek Semua Item'}">
                   <input type="checkbox" id="batchCheckAllHeader"
-                         ${items.length > 0 && items.every(it => Number(it.is_checked) === 1) ? 'checked' : ''}
-                         ${items.length === 0 ? 'disabled' : ''}
+                         ${isReceived && items.length > 0 && items.every(it => Number(it.is_checked) === 1) ? 'checked' : ''}
+                         ${(!isReceived || items.length === 0) ? 'disabled' : ''}
                          onchange="checkAllBatchItems(${b.id}, this.checked ? 1 : 0)"
-                         style="width:18px; height:18px; cursor:pointer; accent-color:#4caf50; vertical-align:middle; margin:0;"
-                         title="Centang untuk cek semua item / batalkan semua">
+                         style="width:18px; height:18px; accent-color:#4caf50; vertical-align:middle; margin:0; ${(!isReceived || items.length === 0) ? 'opacity:0.35; cursor:not-allowed;' : 'cursor:pointer;'}"
+                         title="${!isReceived ? 'Checklist item hanya aktif jika Status Batch adalah DITERIMA' : 'Centang untuk cek semua item / batalkan semua'}">
                 </th>
                 <th>Nama Item &amp; Seri</th>
                 <th>Tgl Beli</th>
@@ -1111,7 +1154,7 @@ function renderBatchDetail(b) {
               </tr>
             </thead>
             <tbody>
-              ${renderBatchItemRows(items, b.id)}
+              ${renderBatchItemRows(items, b.id, isReceived)}
             </tbody>
           </table>
         </div>
@@ -1122,13 +1165,13 @@ function renderBatchDetail(b) {
   loadSuppliersIntoDropdown('bhSupplier', b.supplier_id);
 
   const headerCb = document.getElementById('batchCheckAllHeader');
-  if (headerCb && items.length > 0) {
+  if (headerCb && isReceived && items.length > 0) {
     const checkedCnt = items.filter(it => Number(it.is_checked) === 1).length;
     headerCb.indeterminate = (checkedCnt > 0 && checkedCnt < items.length);
   }
 }
 
-function renderBatchItemRows(items, batchId) {
+function renderBatchItemRows(items, batchId, isReceived = true) {
   if (!items || items.length === 0) {
     return `
       <tr>
@@ -1153,19 +1196,20 @@ function renderBatchItemRows(items, batchId) {
     const fotoRev = it.foto_rev;
     const hasPhoto = Boolean(fotoObv || fotoRev);
 
+    const itemChecked = isReceived && Boolean(it.is_checked);
     return `
-      <tr style="${it.is_checked ? 'background: rgba(46,125,50,0.07);' : ''}">
+      <tr style="${itemChecked ? 'background: rgba(46,125,50,0.07);' : ''}">
         <td style="text-align:center;" onclick="event.stopPropagation()">
-          <input type="checkbox" class="batch-item-checkbox" ${it.is_checked ? 'checked' : ''}
+          <input type="checkbox" class="batch-item-checkbox" ${itemChecked ? 'checked' : ''} ${!isReceived ? 'disabled' : ''}
                  onchange="handleToggleBatchItemCheck(${it.id}, ${batchId}, this.checked)"
-                 style="width:18px; height:18px; cursor:pointer; accent-color:#4caf50;"
-                 title="${it.is_checked ? 'Sudah dicek (klik untuk batalkan)' : 'Klik untuk checklist item ini dari web'}">
+                 style="width:18px; height:18px; accent-color:#4caf50; ${!isReceived ? 'opacity:0.35; cursor:not-allowed;' : 'cursor:pointer;'}"
+                 title="${!isReceived ? 'Checklist item hanya aktif jika Status Batch adalah DITERIMA' : (itemChecked ? 'Sudah dicek (klik untuk batalkan)' : 'Klik untuk checklist item ini dari web')}">
         </td>
         <td>
           <div style="display:flex; align-items:center; gap:6px;">
             <span>${getJenisIcon(it.jenis)}</span>
             <strong style="cursor:pointer;" onclick="showEditBatchItemModal(${it.id}, ${batchId})" title="Klik untuk edit">${escapeHtml(it.nama_item || '-')}</strong>
-            ${it.is_checked ? '<span title="Item sudah dicek fisik dari web" style="color:#4caf50; font-weight:bold; font-size:12px;">✓</span>' : ''}
+            ${itemChecked ? '<span title="Item sudah dicek fisik dari web" style="color:#4caf50; font-weight:bold; font-size:12px;">✓</span>' : ''}
             ${hasPhoto ? `<span class="photo-indicator" title="Lihat foto item" onclick="viewImageLightbox('${escapeHtml(fotoObv || fotoRev)}', '${escapeHtml(it.nama_item)}')">📷</span>` : ''}
           </div>
           <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:2px;">
@@ -1696,10 +1740,10 @@ async function showEditBatchItemModal(itemId, batchId) {
           </div>
         </div>
 
-        <label for="ebiIsChecked" style="display:flex; flex-direction:row; align-items:center; gap:10px; background:rgba(46,125,50,0.08); padding:9px 13px; border-radius:6px; border:1px solid rgba(76,175,80,0.25); margin-bottom:14px; cursor:pointer; user-select:none;">
-          <input type="checkbox" id="ebiIsChecked" ${item.is_checked ? 'checked' : ''} style="width:17px; height:17px; cursor:pointer; accent-color:#4caf50; margin:0; flex-shrink:0;">
+        <label for="ebiIsChecked" style="display:flex; flex-direction:row; align-items:center; gap:10px; background:rgba(46,125,50,0.08); padding:9px 13px; border-radius:6px; border:1px solid rgba(76,175,80,0.25); margin-bottom:14px; user-select:none; ${currentBatchData?.status !== 'terima' ? 'opacity:0.45; cursor:not-allowed;' : 'cursor:pointer;'}" title="${currentBatchData?.status !== 'terima' ? 'Fitur checklist hanya aktif jika Status Batch adalah DITERIMA' : ''}">
+          <input type="checkbox" id="ebiIsChecked" ${(currentBatchData?.status === 'terima' && item.is_checked) ? 'checked' : ''} ${currentBatchData?.status !== 'terima' ? 'disabled' : ''} style="width:17px; height:17px; accent-color:#4caf50; margin:0; flex-shrink:0; ${currentBatchData?.status !== 'terima' ? 'cursor:not-allowed;' : 'cursor:pointer;'}">
           <span style="font-size:12.5px; font-weight:600; color:var(--text-primary);">
-            ✓ Checklist Verifikasi (Item sudah diverifikasi fisik / ada di tangan)
+            ${currentBatchData?.status !== 'terima' ? '🔒 Checklist Verifikasi (Aktif saat status pengiriman Batch = Diterima)' : '✓ Checklist Verifikasi (Item sudah diverifikasi fisik / ada di tangan)'}
           </span>
         </label>
 

@@ -245,6 +245,7 @@ class BatchCreate(BaseModel):
     link_pembelian: Optional[str] = None
     tanggal_beli: Optional[str] = None
     status: Optional[str] = "pesan"
+    is_final_ok: Optional[int] = 0
     catatan: Optional[str] = None
 
 class BatchUpdate(BaseModel):
@@ -255,6 +256,7 @@ class BatchUpdate(BaseModel):
     link_pembelian: Optional[str] = None
     tanggal_beli: Optional[str] = None
     status: Optional[str] = None
+    is_final_ok: Optional[int] = None
     catatan: Optional[str] = None
 
 class BatchResponse(BaseModel):
@@ -269,8 +271,10 @@ class BatchResponse(BaseModel):
     link_pembelian: Optional[str] = None
     tanggal_beli: Optional[str] = None
     status: str
+    is_final_ok: Optional[int] = 0
     catatan: Optional[str] = None
     item_count: Optional[int] = 0
+    checked_item_count: Optional[int] = 0
     created_by: Optional[int] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -313,6 +317,7 @@ class KoleksiCreate(BaseModel):
     ongkir: float = 0.0
     harga_jual: float = 0.0
     status_koleksi: Optional[str] = "stock_jual"
+    is_checked: Optional[int] = 0
 
 class KoleksiUpdate(BaseModel):
     kode_item: Optional[str] = None
@@ -351,6 +356,7 @@ class KoleksiUpdate(BaseModel):
     ongkir: Optional[float] = None
     harga_jual: Optional[float] = None
     status_koleksi: Optional[str] = None
+    is_checked: Optional[int] = None
 
 class PecahStokRequest(BaseModel):
     qty_pecahan: int
@@ -414,6 +420,7 @@ class KoleksiResponse(BaseModel):
     harga_jual: float
     status_koleksi: str
     is_pecahan: int
+    is_checked: Optional[int] = 0
     parent_id: Optional[int] = None
     gallery_fotos: Optional[List[Dict[str, Any]]] = None
     created_by: Optional[int] = None

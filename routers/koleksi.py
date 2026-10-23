@@ -353,6 +353,7 @@ def update_koleksi(
         ("status", payload.status),
         ("harga_jual", payload.harga_jual),
         ("status_koleksi", payload.status_koleksi),
+        ("is_checked", payload.is_checked),
     ]
 
     if payload.group_id is not None and payload.group_id > 0:

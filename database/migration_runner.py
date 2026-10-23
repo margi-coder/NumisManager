@@ -74,10 +74,25 @@ def migration_003_add_group_item(conn: sqlite3.Connection):
         cursor.execute("ALTER TABLE koleksi ADD COLUMN group_id INTEGER REFERENCES group_item(id)")
     conn.commit()
 
+def migration_004_batch_checklist_and_final_ok(conn: sqlite3.Connection):
+    """Menambahkan kolom is_final_ok pada batch_pembelian dan is_checked pada koleksi."""
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(batch_pembelian)")
+    batch_cols = [row["name"] for row in cursor.fetchall()]
+    if "is_final_ok" not in batch_cols:
+        cursor.execute("ALTER TABLE batch_pembelian ADD COLUMN is_final_ok INTEGER DEFAULT 0")
+
+    cursor.execute("PRAGMA table_info(koleksi)")
+    koleksi_cols = [row["name"] for row in cursor.fetchall()]
+    if "is_checked" not in koleksi_cols:
+        cursor.execute("ALTER TABLE koleksi ADD COLUMN is_checked INTEGER DEFAULT 0")
+    conn.commit()
+
 MIGRATIONS: List[Tuple[str, str, Callable[[sqlite3.Connection], None]]] = [
     ("001_baseline", "Baseline schema tracking", migration_001_baseline),
     ("002_certification_and_photos", "Add grading certification fields and photo gallery table", migration_002_add_certification_and_photos),
     ("003_add_group_item", "Add group_item master table and group_id relation in koleksi", migration_003_add_group_item),
+    ("004_batch_checklist_and_final_ok", "Add is_final_ok in batch_pembelian and is_checked in koleksi", migration_004_batch_checklist_and_final_ok),
 ]
 
 def run_migrations(conn: sqlite3.Connection):

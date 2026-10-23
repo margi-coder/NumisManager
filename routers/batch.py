@@ -71,8 +71,9 @@ def list_batches(
     data_sql = f"""
         SELECT b.id, b.kode_batch, b.nama_batch, b.supplier_id, s.nama as supplier_nama,
                b.total_ongkir, b.perolehan, b.link_pembelian, b.tanggal_beli,
-               b.status, b.catatan, b.created_by, b.created_at, b.updated_at,
+               b.status, COALESCE(b.is_final_ok, 0) as is_final_ok, b.catatan, b.created_by, b.created_at, b.updated_at,
                COUNT(k.id) as item_count,
+               COALESCE(SUM(CASE WHEN k.is_checked = 1 THEN 1 ELSE 0 END), 0) as checked_item_count,
                COALESCE(SUM(k.harga), 0) as total_harga_items,
                COALESCE(SUM(k.hpp), 0) as total_hpp_items
         FROM batch_pembelian b
@@ -120,8 +121,8 @@ def create_batch(
         """
         INSERT INTO batch_pembelian (
             kode_batch, nama_batch, supplier_id, total_ongkir, perolehan,
-            link_pembelian, tanggal_beli, status, catatan, created_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            link_pembelian, tanggal_beli, status, is_final_ok, catatan, created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             kode_batch,
@@ -132,6 +133,7 @@ def create_batch(
             payload.link_pembelian,
             tanggal_beli,
             payload.status or "pesan",
+            1 if payload.is_final_ok else 0,
             payload.catatan,
             current_user["id"]
         )
@@ -172,7 +174,7 @@ def get_batch_detail(
     cursor.execute(
         """
         SELECT k.id, k.kode_item, k.nama_item, k.nomor_seri, k.tahun, k.denominasi, k.grade, k.jenis, k.negara,
-               k.status, k.qty, k.qty_terjual, (k.qty - k.qty_terjual) as qty_tersisa,
+               k.status, COALESCE(k.is_checked, 0) as is_checked, k.qty, k.qty_terjual, (k.qty - k.qty_terjual) as qty_tersisa,
                k.harga, k.ongkir, k.hpp, k.hpp_per_pcs, k.harga_jual, k.status_koleksi, k.foto_path, k.foto_obv, k.foto_rev,
                k.tanggal_beli, k.detail, k.catatan_internal, k.kondisi_fisik, k.lokasi_simpan,
                k.lembaga_grading, k.nomor_sertifikasi, k.grade_numerik,
@@ -185,8 +187,10 @@ def get_batch_detail(
         (batch_id,)
     )
     items = cursor.fetchall()
-    batch_data["items"] = [dict(it) for it in items]
-    batch_data["item_count"] = len(items)
+    items_list = [dict(it) for it in items]
+    batch_data["items"] = items_list
+    batch_data["item_count"] = len(items_list)
+    batch_data["checked_item_count"] = sum(1 for it in items_list if it.get("is_checked"))
 
     return batch_data
 
@@ -239,6 +243,9 @@ def update_batch(
     if payload.status is not None:
         updates.append("status = ?")
         params.append(payload.status)
+    if payload.is_final_ok is not None:
+        updates.append("is_final_ok = ?")
+        params.append(1 if payload.is_final_ok else 0)
     if payload.catatan is not None:
         updates.append("catatan = ?")
         params.append(payload.catatan)
@@ -388,6 +395,115 @@ def recalculate_batch_hpp(
     return {
         "message": "HPP seluruh item dalam batch berhasil dihitung ulang",
         "items_updated": len(recalculated)
+    }
+
+@router.post("/{batch_id}/toggle-item-check/{item_id}")
+def toggle_batch_item_check(
+    batch_id: int,
+    item_id: int,
+    payload: Optional[Dict[str, Any]] = None,
+    conn: sqlite3.Connection = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Mencentang atau membatalkan centang checklist verifikasi item koleksi di dalam batch langsung dari web."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, is_checked FROM koleksi WHERE id = ? AND batch_id = ?", (item_id, batch_id))
+    item = cursor.fetchone()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item dalam batch ini tidak ditemukan")
+
+    if payload and "is_checked" in payload:
+        new_val = 1 if payload["is_checked"] else 0
+    else:
+        new_val = 0 if (item["is_checked"] == 1) else 1
+
+    cursor.execute("UPDATE koleksi SET is_checked = ?, updated_at = datetime('now','localtime') WHERE id = ?", (new_val, item_id))
+
+    # Cek progress checklist seluruh item dalam batch
+    cursor.execute("SELECT COUNT(*) as total, SUM(CASE WHEN is_checked = 1 THEN 1 ELSE 0 END) as checked_cnt FROM koleksi WHERE batch_id = ?", (batch_id,))
+    stats = cursor.fetchone()
+    total_cnt = stats["total"] or 0
+    checked_cnt = stats["checked_cnt"] or 0
+    all_checked = (total_cnt > 0 and checked_cnt == total_cnt)
+
+    conn.commit()
+
+    return {
+        "success": True,
+        "item_id": item_id,
+        "is_checked": new_val,
+        "total_items": total_cnt,
+        "checked_items": checked_cnt,
+        "all_checked": all_checked
+    }
+
+@router.post("/{batch_id}/check-all-items")
+def check_all_batch_items(
+    batch_id: int,
+    payload: Optional[Dict[str, Any]] = None,
+    conn: sqlite3.Connection = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Mencentang atau membatalkan seluruh checklist item dalam batch sekaligus."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM batch_pembelian WHERE id = ?", (batch_id,))
+    if not cursor.fetchone():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch tidak ditemukan")
+
+    check_val = 1
+    if payload:
+        if "check_all" in payload:
+            check_val = 1 if payload["check_all"] else 0
+        elif "is_checked" in payload:
+            check_val = 1 if payload["is_checked"] else 0
+
+    cursor.execute("UPDATE koleksi SET is_checked = ?, updated_at = datetime('now','localtime') WHERE batch_id = ?", (check_val, batch_id))
+
+    if check_val == 1:
+        cursor.execute("UPDATE batch_pembelian SET is_final_ok = 1, updated_at = datetime('now','localtime') WHERE id = ?", (batch_id,))
+    else:
+        cursor.execute("UPDATE batch_pembelian SET is_final_ok = 0, updated_at = datetime('now','localtime') WHERE id = ?", (batch_id,))
+
+    conn.commit()
+
+    cursor.execute("SELECT COUNT(*) as total, SUM(CASE WHEN is_checked = 1 THEN 1 ELSE 0 END) as checked_cnt FROM koleksi WHERE batch_id = ?", (batch_id,))
+    stats = cursor.fetchone()
+
+    return {
+        "success": True,
+        "batch_id": batch_id,
+        "is_checked": check_val,
+        "total_items": stats["total"] or 0,
+        "checked_items": stats["checked_cnt"] or 0,
+        "is_final_ok": check_val
+    }
+
+@router.post("/{batch_id}/toggle-final-ok")
+def toggle_batch_final_ok(
+    batch_id: int,
+    payload: Optional[Dict[str, Any]] = None,
+    conn: sqlite3.Connection = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Mengubah status Final OK (Barang Lengkap) pada batch pembelian."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, is_final_ok FROM batch_pembelian WHERE id = ?", (batch_id,))
+    batch = cursor.fetchone()
+    if not batch:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch tidak ditemukan")
+
+    if payload and "is_final_ok" in payload:
+        new_val = 1 if payload["is_final_ok"] else 0
+    else:
+        new_val = 0 if (batch["is_final_ok"] == 1) else 1
+
+    cursor.execute("UPDATE batch_pembelian SET is_final_ok = ?, updated_at = datetime('now','localtime') WHERE id = ?", (new_val, batch_id))
+    conn.commit()
+
+    return {
+        "success": True,
+        "batch_id": batch_id,
+        "is_final_ok": new_val
     }
 
 # ==============================================================================

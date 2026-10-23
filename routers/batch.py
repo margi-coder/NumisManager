@@ -34,6 +34,7 @@ def list_batches(
     page: int = Query(1, ge=1, description="Nomor halaman"),
     limit: int = Query(100, ge=1, le=500, description="Jumlah data per halaman"),
     status: Optional[str] = Query(None, description="Filter status batch (pesan/dikirim/terima)"),
+    is_final_ok: Optional[int] = Query(None, description="Filter status final kelengkapan batch (1=Final OK, 0=Kurang/Belum Lengkap)"),
     perolehan: Optional[str] = Query(None, description="Filter metode perolehan"),
     search: Optional[str] = Query(None, description="Pencarian nama batch, kode batch, atau supplier"),
     conn: sqlite3.Connection = Depends(get_db),
@@ -47,6 +48,9 @@ def list_batches(
     if status:
         where_clauses.append("b.status = ?")
         params.append(status)
+    if is_final_ok is not None:
+        where_clauses.append("COALESCE(b.is_final_ok, 0) = ?")
+        params.append(int(is_final_ok))
     if perolehan:
         where_clauses.append("b.perolehan = ?")
         params.append(perolehan)

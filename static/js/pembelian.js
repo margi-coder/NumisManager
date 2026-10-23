@@ -501,6 +501,7 @@ async function submitSinglePurchase() {
 let batchFilterState = {
   search: '',
   status: '',
+  statusFinal: '',
   perolehan: '',
   isVisible: localStorage.getItem('numis_batch_filter_visible') === '1'
 };
@@ -541,14 +542,20 @@ async function loadPembelianBatch() {
           >
         </div>
 
-        <select id="batchFilterStatus" class="form-select" style="max-width:170px;" onchange="applyBatchFilter()">
+        <select id="batchFilterStatus" class="form-select" style="max-width:160px;" onchange="applyBatchFilter()">
           <option value="">Semua Status</option>
           <option value="pesan" ${batchFilterState.status === 'pesan' ? 'selected' : ''}>Pesan</option>
           <option value="dikirim" ${batchFilterState.status === 'dikirim' ? 'selected' : ''}>Dikirim</option>
           <option value="terima" ${batchFilterState.status === 'terima' ? 'selected' : ''}>Diterima</option>
         </select>
 
-        <select id="batchFilterPerolehan" class="form-select" style="max-width:180px;" onchange="applyBatchFilter()">
+        <select id="batchFilterStatusFinal" class="form-select" style="max-width:215px;" onchange="applyBatchFilter()">
+          <option value="">Semua Status Final</option>
+          <option value="1" ${batchFilterState.statusFinal === '1' ? 'selected' : ''}>✅ Final OK (Lengkap)</option>
+          <option value="0" ${batchFilterState.statusFinal === '0' ? 'selected' : ''}>⚠️ Kurang / Belum Lengkap</option>
+        </select>
+
+        <select id="batchFilterPerolehan" class="form-select" style="max-width:175px;" onchange="applyBatchFilter()">
           <option value="">Semua Perolehan</option>
           ${PEROLEHAN_OPTIONS.map(opt => `<option value="${opt}" ${batchFilterState.perolehan === opt ? 'selected' : ''}>${PEROLEHAN_LABELS[opt] || opt}</option>`).join('')}
         </select>
@@ -621,10 +628,12 @@ const handleLiveBatchFilter = debounce(() => {
 function applyBatchFilter() {
   const sInput = document.getElementById('batchFilterSearch');
   const stSelect = document.getElementById('batchFilterStatus');
+  const sfSelect = document.getElementById('batchFilterStatusFinal');
   const pSelect = document.getElementById('batchFilterPerolehan');
 
   batchFilterState.search = sInput ? sInput.value.trim() : '';
   batchFilterState.status = stSelect ? stSelect.value : '';
+  batchFilterState.statusFinal = sfSelect ? sfSelect.value : '';
   batchFilterState.perolehan = pSelect ? pSelect.value : '';
 
   renderLoading('batchListTableContainer', 'Memfilter daftar batch pengadaan...');
@@ -634,14 +643,17 @@ function applyBatchFilter() {
 function resetBatchFilter() {
   batchFilterState.search = '';
   batchFilterState.status = '';
+  batchFilterState.statusFinal = '';
   batchFilterState.perolehan = '';
 
   const sInput = document.getElementById('batchFilterSearch');
   const stSelect = document.getElementById('batchFilterStatus');
+  const sfSelect = document.getElementById('batchFilterStatusFinal');
   const pSelect = document.getElementById('batchFilterPerolehan');
 
   if (sInput) sInput.value = '';
   if (stSelect) stSelect.value = '';
+  if (sfSelect) sfSelect.value = '';
   if (pSelect) pSelect.value = '';
 
   renderLoading('batchListTableContainer', 'Memuat daftar batch pengadaan...');
@@ -653,6 +665,7 @@ async function refreshBatchList() {
     const params = new URLSearchParams();
     if (batchFilterState.search) params.append('search', batchFilterState.search);
     if (batchFilterState.status) params.append('status', batchFilterState.status);
+    if (batchFilterState.statusFinal !== '') params.append('is_final_ok', batchFilterState.statusFinal);
     if (batchFilterState.perolehan) params.append('perolehan', batchFilterState.perolehan);
     params.append('limit', '100');
 
@@ -671,6 +684,9 @@ async function refreshBatchList() {
     }
     if (batchFilterState.status) {
       batches = batches.filter(b => b.status === batchFilterState.status);
+    }
+    if (batchFilterState.statusFinal !== '') {
+      batches = batches.filter(b => Number(b.is_final_ok ? 1 : 0) === Number(batchFilterState.statusFinal));
     }
     if (batchFilterState.perolehan) {
       batches = batches.filter(b => b.perolehan === batchFilterState.perolehan);
@@ -694,7 +710,7 @@ function renderBatchList(batches) {
   if (!container) return;
 
   if (!batches || batches.length === 0) {
-    const hasActiveFilter = Boolean(batchFilterState.search || batchFilterState.status || batchFilterState.perolehan);
+    const hasActiveFilter = Boolean(batchFilterState.search || batchFilterState.status || batchFilterState.statusFinal !== '' || batchFilterState.perolehan);
     if (hasActiveFilter) {
       renderEmpty(
         'batchListTableContainer',
@@ -738,8 +754,10 @@ function renderBatchList(batches) {
       <tr style="cursor:pointer; ${b.is_final_ok ? 'background: rgba(46,125,50,0.06);' : ''}" onclick="selectBatch(${b.id})" title="Klik untuk membuka &amp; mengelola batch ini">
         <td><strong style="color:var(--gold-light); font-family:monospace;">${escapeHtml(b.kode_batch || '#' + b.id)}</strong></td>
         <td>
-          <div style="display:flex; align-items:center; gap:6px;">
-            ${b.is_final_ok ? '<span title="Status: Final OK (Barang Lengkap)" style="font-size:14px;">✅</span>' : ''}
+          <div style="display:flex; align-items:center; gap:7px;">
+            ${b.is_final_ok
+              ? '<span title="Final OK (Barang Lengkap)" style="font-size:14px; line-height:1; flex-shrink:0;">✅</span>'
+              : '<span title="Kurang / Belum Lengkap" style="font-size:14px; line-height:1; flex-shrink:0;">⚠️</span>'}
             <strong style="color:var(--text-primary); font-size:13px;">${escapeHtml(batchTitle)}</strong>
           </div>
         </td>
@@ -749,12 +767,7 @@ function renderBatchList(batches) {
           ${(b.checked_item_count !== undefined && b.checked_item_count > 0) ? `<div style="font-size:11px; color:#4caf50; font-weight:600; margin-top:2px;" title="Jumlah item yang sudah dichecklist dari web">✓ ${b.checked_item_count}/${itemCount} dicek</div>` : ''}
         </td>
         <td style="color:var(--gold-light); font-weight:600;">${formatRupiah(b.total_ongkir || 0)}</td>
-        <td>
-          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-            ${formatStatus(b.status)}
-            ${b.is_final_ok ? '<span class="badge" style="background:rgba(46,125,50,0.22); color:#4caf50; border:1px solid #4caf50; font-weight:700; font-size:11px;" title="Barang Lengkap & Final OK">✅ Final OK</span>' : ''}
-          </div>
-        </td>
+        <td>${formatStatus(b.status)}</td>
         <td style="text-align:center;" onclick="event.stopPropagation()">
           <div class="td-actions" style="justify-content:center; gap:6px;">
             <button class="btn btn-secondary btn-icon" onclick="showPrintBatchCrosscheckModal(${b.id})" title="Cetak / Ekspor PDF Lembar Crosscheck Batch">
@@ -850,7 +863,9 @@ async function showBatchDetailModal(batchId) {
                 <span style="font-size:11px; color:var(--text-secondary); display:block;">Status Batch</span>
                 <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                   ${formatStatus(b.status)}
-                  ${b.is_final_ok ? '<span class="badge" style="background:rgba(46,125,50,0.22); color:#4caf50; border:1px solid #4caf50; font-weight:700; font-size:11px;">✅ Final OK (Barang Lengkap)</span>' : ''}
+                  ${b.is_final_ok
+                    ? '<span class="badge" style="background:rgba(46,125,50,0.22); color:#4caf50; border:1px solid #4caf50; font-weight:700; font-size:11px;">✅ Final OK (Barang Lengkap)</span>'
+                    : '<span class="badge" style="background:rgba(232,168,56,0.16); color:var(--warning); border:1px solid rgba(232,168,56,0.5); font-weight:700; font-size:11px;">⚠️ Kurang / Belum Lengkap</span>'}
                 </div>
               </div>
               <div>
@@ -1001,10 +1016,18 @@ function renderBatchDetail(b) {
       <!-- Batch Header Edit Card -->
       <div class="card">
         <div class="section-header" style="margin-bottom:14px;">
-          <h4 style="color:var(--gold-light); font-size:15px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <h4 style="color:var(--gold-light); font-size:15px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:0;">
             <span>📦 ${escapeHtml(batchNama)}</span>
             <span style="font-size:12px; color:var(--text-muted); font-weight:400;">(${escapeHtml(b.kode_batch || '#' + b.id)})</span>
-            ${b.is_final_ok ? '<span class="badge" style="background:rgba(46,125,50,0.22); color:#4caf50; border:1px solid #4caf50; font-weight:700; font-size:11.5px; padding:2px 8px;">✅ Final OK (Barang Lengkap)</span>' : ''}
+            <span id="batchFinalStatusBadge" class="badge" style="${b.is_final_ok ? 'background:rgba(46,125,50,0.22); color:#4caf50; border:1px solid #4caf50;' : 'background:rgba(232,168,56,0.16); color:var(--warning); border:1px solid rgba(232,168,56,0.5);'} font-weight:700; font-size:11.5px; padding:3px 9px;">
+              ${b.is_final_ok ? '✅ FINAL OK (BARANG LENGKAP)' : '⚠️ KURANG / BELUM LENGKAP'}
+            </span>
+            <label id="bhFinalOkLabel" for="bhIsFinalOk" style="display:inline-flex; flex-direction:row; align-items:center; gap:7px; cursor:pointer; padding:3px 10px; border-radius:6px; background:${b.is_final_ok ? 'rgba(46,125,50,0.12)' : 'rgba(255,255,255,0.04)'}; border:1px solid ${b.is_final_ok ? 'rgba(76,175,80,0.4)' : 'var(--border)'}; font-size:12px; font-weight:600; color:var(--text-primary); user-select:none;" title="Centang jika seluruh isi lot telah diverifikasi fisik lengkap">
+              <input type="checkbox" id="bhIsFinalOk" ${b.is_final_ok ? 'checked' : ''}
+                     onchange="toggleBatchFinalOk(${b.id}, this.checked ? 1 : 0)"
+                     style="width:15px; height:15px; cursor:pointer; accent-color:#4caf50; margin:0; flex-shrink:0;">
+              <span>Tandai Final OK (Barang Lengkap)</span>
+            </label>
           </h4>
         </div>
 
@@ -1043,15 +1066,7 @@ function renderBatchDetail(b) {
             </div>
           </div>
 
-          <div class="form-group" style="margin-top:12px; padding:10px 14px; background:rgba(46,125,50,0.08); border:1px solid rgba(76,175,80,0.25); border-radius:8px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-            <input type="checkbox" id="bhIsFinalOk" ${b.is_final_ok ? 'checked' : ''} style="width:18px; height:18px; cursor:pointer; accent-color:#4caf50;">
-            <label for="bhIsFinalOk" style="cursor:pointer; margin:0; font-size:13px; font-weight:600; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
-              <span>✅ Tandai Final OK (Barang Lengkap &amp; Selesai Diterima)</span>
-            </label>
-            <span style="margin-left:auto; font-size:11.5px; color:var(--text-muted);">Centang jika seluruh isi lot telah diverifikasi fisik lengkap dari web</span>
-          </div>
-
-          <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+          <div style="display:flex; justify-content:flex-end; margin-top:4px;">
             <button type="submit" class="btn btn-primary btn-sm">Simpan Header Batch</button>
           </div>
         </form>
@@ -1064,26 +1079,26 @@ function renderBatchDetail(b) {
             <h4 style="font-size:15px; color:var(--text-primary);">Item dalam Batch (${items.length})</h4>
             <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
               Total Beli: <strong>${formatRupiah(totalBeli)}</strong> | Total HPP: <strong style="color:var(--gold-light);">${formatRupiah(totalHpp)}</strong>
+              ${items.length > 0 ? ` | Dicek: <strong style="color:#4caf50;">✓ ${items.filter(it => Number(it.is_checked) === 1).length}/${items.length}</strong>` : ''}
             </div>
           </div>
-          <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="checkAllBatchItems(${b.id}, 1)" title="Checklist semua item batch dari web">
-              ✓ Cek Semua
-            </button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="checkAllBatchItems(${b.id}, 0)" title="Batalkan checklist semua item">
-              ✕ Batal Cek
-            </button>
-            <button type="button" class="btn btn-primary btn-sm" onclick="showAddItemToBatchModal(${b.id})">
-              + Tambah Item ke Batch
-            </button>
-          </div>
+          <button type="button" class="btn btn-primary btn-sm" onclick="showAddItemToBatchModal(${b.id})">
+            + Tambah Item ke Batch
+          </button>
         </div>
 
         <div class="table-wrapper table-compact">
           <table>
             <thead>
               <tr>
-                <th style="width:45px; text-align:center;" title="Checklist Verifikasi Fisik Web">Cek</th>
+                <th style="width:45px; text-align:center;" title="Checklist / Batal Cek Semua Item">
+                  <input type="checkbox" id="batchCheckAllHeader"
+                         ${items.length > 0 && items.every(it => Number(it.is_checked) === 1) ? 'checked' : ''}
+                         ${items.length === 0 ? 'disabled' : ''}
+                         onchange="checkAllBatchItems(${b.id}, this.checked ? 1 : 0)"
+                         style="width:18px; height:18px; cursor:pointer; accent-color:#4caf50; vertical-align:middle; margin:0;"
+                         title="Centang untuk cek semua item / batalkan semua">
+                </th>
                 <th>Nama Item &amp; Seri</th>
                 <th>Tgl Beli</th>
                 <th>Grade</th>
@@ -1105,6 +1120,12 @@ function renderBatchDetail(b) {
   `;
 
   loadSuppliersIntoDropdown('bhSupplier', b.supplier_id);
+
+  const headerCb = document.getElementById('batchCheckAllHeader');
+  if (headerCb && items.length > 0) {
+    const checkedCnt = items.filter(it => Number(it.is_checked) === 1).length;
+    headerCb.indeterminate = (checkedCnt > 0 && checkedCnt < items.length);
+  }
 }
 
 function renderBatchItemRows(items, batchId) {
@@ -1675,12 +1696,12 @@ async function showEditBatchItemModal(itemId, batchId) {
           </div>
         </div>
 
-        <div class="form-group" style="display:flex; align-items:center; gap:10px; background:rgba(46,125,50,0.08); padding:9px 13px; border-radius:6px; border:1px solid rgba(76,175,80,0.25); margin-bottom:14px;">
-          <input type="checkbox" id="ebiIsChecked" ${item.is_checked ? 'checked' : ''} style="width:17px; height:17px; cursor:pointer; accent-color:#4caf50;">
-          <label for="ebiIsChecked" style="cursor:pointer; margin:0; font-size:12.5px; font-weight:600; color:var(--text-primary);">
+        <label for="ebiIsChecked" style="display:flex; flex-direction:row; align-items:center; gap:10px; background:rgba(46,125,50,0.08); padding:9px 13px; border-radius:6px; border:1px solid rgba(76,175,80,0.25); margin-bottom:14px; cursor:pointer; user-select:none;">
+          <input type="checkbox" id="ebiIsChecked" ${item.is_checked ? 'checked' : ''} style="width:17px; height:17px; cursor:pointer; accent-color:#4caf50; margin:0; flex-shrink:0;">
+          <span style="font-size:12.5px; font-weight:600; color:var(--text-primary);">
             ✓ Checklist Verifikasi (Item sudah diverifikasi fisik / ada di tangan)
-          </label>
-        </div>
+          </span>
+        </label>
 
         <!-- Upload Foto OBV & REV -->
         <div class="form-group">
@@ -2107,7 +2128,7 @@ async function checkAllBatchItems(batchId, checkVal) {
 async function toggleBatchFinalOk(batchId, isFinalOk) {
   try {
     const res = await API.post(`/batch/${batchId}/toggle-final-ok`, { is_final_ok: isFinalOk });
-    showToast(res.is_final_ok ? 'Batch ditandai Final OK (Lengkap) ✅' : 'Status Final OK dibatalkan', 'success');
+    showToast(res.is_final_ok ? 'Batch ditandai Final OK (Barang Lengkap) ✅' : 'Batch ditandai Kurang / Belum Lengkap ⚠️', 'success');
     const updatedBatch = await API.get(`/batch/${batchId}`);
     currentBatchData = updatedBatch;
     renderBatchDetail(updatedBatch);

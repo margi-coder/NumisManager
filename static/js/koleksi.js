@@ -717,10 +717,9 @@ async function showViewItemModal(id) {
  */
 async function showEditKoleksiModal(id) {
   try {
-    let item = koleksiItemsCache.find(it => it.id === id);
-    if (!item) {
-      item = await API.get(`/koleksi/${id}`);
-    }
+    const item = await API.get(`/koleksi/${id}`);
+    const fotoObv = item.foto_obv || item.foto_path || item.foto_url || item.foto || '';
+    const fotoRev = item.foto_rev || '';
 
     const detailText = item.detail || item.sertifikasi || '';
     const nominalText = item.denominasi || item.nominal || '';
@@ -858,6 +857,8 @@ async function showEditKoleksiModal(id) {
           <label class="form-label">Keterangan / Catatan Item</label>
           <textarea id="ekCatatan" class="form-control" placeholder="Keterangan kondisi, sertifikasi, dll.">${escapeHtml(catatanVal)}</textarea>
         </div>
+
+        ${SmartPhotoManager.renderSection('ek', { initialObvUrl: fotoObv, initialRevUrl: fotoRev, showSupporting: true })}
       </form>
     `;
 
@@ -873,6 +874,13 @@ async function showEditKoleksiModal(id) {
       size: 'lg'
     });
 
+    SmartPhotoManager.initContext('ek', {
+      koleksiId: id,
+      initialObvUrl: fotoObv,
+      initialRevUrl: fotoRev,
+      existingGallery: item.gallery_fotos || [],
+      showSupporting: true
+    });
     loadGroupItemsIntoDropdown('ekGroupItem', item.group_id, '-- Tanpa Group Item --');
     calcEditUnitHint();
   } catch (err) {
@@ -924,9 +932,15 @@ async function submitUpdateKoleksi(id) {
 
   try {
     await API.put(`/koleksi/${id}`, payload);
-    showToast('Data koleksi berhasil diperbarui!', 'success');
+    await SmartPhotoManager.uploadAllForKoleksi('ek', id);
+    showToast('Data & foto koleksi berhasil diperbarui!', 'success');
     closeModal();
-    loadKoleksi(koleksiCurrentPage);
+    if (document.getElementById('koleksiTableContainer')) {
+      loadKoleksi(koleksiCurrentPage);
+    }
+    if (typeof currentBatchId !== 'undefined' && currentBatchId && document.getElementById('batchRightPanel')) {
+      selectBatch(currentBatchId);
+    }
   } catch (err) {
     showToast('Gagal memperbarui item: ' + err.message, 'error');
   }
@@ -940,7 +954,7 @@ let uploadRevFileHolder = null;
 let uploadGalleryFileHolder = null;
 let currentUploadModalKoleksiId = null;
 
-async function showUploadFotoModal(id, namaItem, activeTab = 'tab-gallery') {
+async function showUploadFotoModal(id, namaItem, activeTab = 'tab-main') {
   currentUploadModalKoleksiId = id;
   uploadObvFileHolder = null;
   uploadRevFileHolder = null;
@@ -952,167 +966,34 @@ async function showUploadFotoModal(id, namaItem, activeTab = 'tab-gallery') {
       API.get(`/koleksi/${id}/gallery`)
     ]);
 
-    const fotoObv = item.foto_obv || item.foto_path || item.foto_url || item.foto;
-    const fotoRev = item.foto_rev;
+    const fotoObv = item.foto_obv || item.foto_path || item.foto_url || item.foto || '';
+    const fotoRev = item.foto_rev || '';
     const galleryItems = Array.isArray(gallery) ? gallery : [];
 
     const body = `
-      <div style="margin-bottom:16px;">
+      <div style="margin-bottom:8px;">
         <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(212,175,55,0.08); border:1px solid var(--border-gold); padding:10px 14px; border-radius:8px; margin-bottom:14px;">
           <div>
             <div style="font-size:11px; color:var(--text-muted);">Item Koleksi:</div>
             <div style="font-weight:700; color:var(--gold-light); font-size:14px;">${escapeHtml(item.nama_item)}</div>
             <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">SN: ${escapeHtml(item.nomor_seri || '-')} • Grade: ${escapeHtml(item.grade || '-')}</div>
           </div>
-          <div style="text-align:right;">
+          <div style="text-align:right; display:flex; gap:6px; align-items:center;">
             <span class="badge" style="background:rgba(212,175,55,0.15); color:var(--gold-light); font-size:11px; border:1px solid var(--border-gold);">
-              ${galleryItems.length} Foto Galeri Tersimpan
+              ${galleryItems.length} Foto Pendukung Tersimpan
             </span>
           </div>
         </div>
 
-        <!-- Tab Switcher -->
-        <div style="display:flex; gap:8px; border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:16px;">
-          <button type="button" class="btn btn-sm ${activeTab === 'tab-main' ? 'btn-primary' : 'btn-secondary'}" id="btnTabMainPhotos" onclick="switchUploadPhotoTab('tab-main')">
-            🪙 Foto Utama (OBV &amp; REV)
-          </button>
-          <button type="button" class="btn btn-sm ${activeTab === 'tab-gallery' ? 'btn-primary' : 'btn-secondary'}" id="btnTabGalleryPhotos" onclick="switchUploadPhotoTab('tab-gallery')">
-            📸 Galeri Multi-Foto (${galleryItems.length})
-          </button>
-        </div>
-
-        <!-- TAB 1: Foto Utama (OBV & REV) -->
-        <div id="sectionTabMain" style="display:${activeTab === 'tab-main' ? 'block' : 'none'};">
-          <div style="font-size:12px; color:var(--text-secondary); margin-bottom:12px;">
-            Unggah atau perbarui foto tampak depan (Obverse) dan tampak belakang (Reverse):
-          </div>
-
-          <div class="dual-photo-grid">
-            <!-- Obverse Card -->
-            <div class="photo-box-card ${fotoObv ? 'has-image' : ''}" id="modalObvZone" onclick="document.getElementById('modalObvInput').click()">
-              <input type="file" id="modalObvInput" accept="image/*" style="display:none" onchange="handleModalObvSelect(event)">
-              <div id="modalObvPrompt" style="${fotoObv ? 'display:none;' : ''}">
-                <div style="font-size:32px; margin-bottom:4px;">🪙</div>
-                <div style="font-weight:600; font-size:13px; color:var(--text-primary);">Tampak Depan (OBV)</div>
-                <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Klik untuk pilih foto baru</div>
-              </div>
-              <img id="modalObvPreview" class="photo-box-preview" src="${fotoObv ? escapeHtml(fotoObv) : ''}" style="${fotoObv ? 'display:block;' : 'display:none;'}" alt="Preview Obverse">
-              <div class="photo-box-label">📸 Obverse (Muka)</div>
-            </div>
-
-            <!-- Reverse Card -->
-            <div class="photo-box-card ${fotoRev ? 'has-image' : ''}" id="modalRevZone" onclick="document.getElementById('modalRevInput').click()">
-              <input type="file" id="modalRevInput" accept="image/*" style="display:none" onchange="handleModalRevSelect(event)">
-              <div id="modalRevPrompt" style="${fotoRev ? 'display:none;' : ''}">
-                <div style="font-size:32px; margin-bottom:4px;">🪙</div>
-                <div style="font-weight:600; font-size:13px; color:var(--text-primary);">Tampak Belakang (REV)</div>
-                <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Klik untuk pilih foto baru</div>
-              </div>
-              <img id="modalRevPreview" class="photo-box-preview" src="${fotoRev ? escapeHtml(fotoRev) : ''}" style="${fotoRev ? 'display:block;' : 'display:none;'}" alt="Preview Reverse">
-              <div class="photo-box-label">📸 Reverse (Belakang)</div>
-            </div>
-          </div>
-
-          <div style="margin-top:16px; text-align:right;">
-            <button type="button" class="btn btn-primary" onclick="submitUploadFoto(${id})">
-              💾 Simpan Foto Utama (OBV/REV)
-            </button>
-          </div>
-        </div>
-
-        <!-- TAB 2: Galeri Multi-Foto (Watermark, Slab, Detail, dll.) -->
-        <div id="sectionTabGallery" style="display:${activeTab === 'tab-gallery' ? 'block' : 'none'};">
-          <!-- Form Upload Foto Galeri Baru -->
-          <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-gold); border-radius:8px; padding:14px; margin-bottom:18px;">
-            <div style="font-size:13px; font-weight:700; color:var(--gold-light); margin-bottom:10px; display:flex; align-items:center; gap:6px;">
-              <span>+ Tambah Foto Dokumentasi ke Galeri (Multi-Photo)</span>
-            </div>
-            
-            <form id="addGalleryPhotoForm" onsubmit="event.preventDefault(); submitUploadGalleryPhoto(${id}, '${escapeHtml(namaItem)}');">
-              <div class="data-grid-3">
-                <div class="form-group" style="margin-bottom:0;">
-                  <label class="form-label" style="font-size:11px;">Pilih Berkas Foto <span class="required">*</span></label>
-                  <input type="file" id="galFileInput" class="form-control" accept="image/*" required onchange="handleGalleryFileSelect(event)">
-                </div>
-                <div class="form-group" style="margin-bottom:0;">
-                  <label class="form-label" style="font-size:11px;">Label / Kategori Foto <span class="required">*</span></label>
-                  <select id="galLabelSelect" class="form-select" required>
-                    <option value="watermark">💧 Tanda Air (Watermark)</option>
-                    <option value="slab">🏛️ Slab / Segel Grading PMG/PCGS</option>
-                    <option value="benang_pengaman">🧵 Benang Pengaman / Security Thread</option>
-                    <option value="detail" selected>🔍 Detail Fitur &amp; Cetakan</option>
-                    <option value="cacat_variasi">⚠️ Cacat Cetak / Variasi Error</option>
-                    <option value="sertifikat">📄 Sertifikat / Faktur Keaslian</option>
-                    <option value="lainnya">📸 Dokumentasi Tambahan Lainnya</option>
-                  </select>
-                </div>
-                <div class="form-group" style="margin-bottom:0;">
-                  <label class="form-label" style="font-size:11px;">Keterangan / Catatan Foto</label>
-                  <input type="text" id="galCatatanInput" class="form-control" placeholder="cth: Tampak serat fluoresensi di bawah UV">
-                </div>
-              </div>
-
-              <!-- Live File Preview Box -->
-              <div id="galPreviewContainer" style="display:none; margin-top:10px; align-items:center; gap:12px; background:rgba(0,0,0,0.3); padding:8px 12px; border-radius:6px; border:1px solid var(--border);">
-                <img id="galPreviewImg" style="width:55px; height:42px; object-fit:cover; border-radius:4px; border:1px solid var(--border-gold);">
-                <div>
-                  <div style="font-size:11.5px; font-weight:600; color:var(--text-primary);" id="galPreviewFilename"></div>
-                  <div style="font-size:10.5px; color:var(--text-muted);" id="galPreviewFilesize"></div>
-                </div>
-              </div>
-
-              <div style="margin-top:12px; text-align:right;">
-                <button type="submit" class="btn btn-primary btn-sm" id="btnSubmitGallery">
-                  ⬆️ Unggah Foto ke Galeri
-                </button>
-              </div>
-            </form>
-          </div>
-
-          <!-- Existing Gallery Photos Grid -->
-          <div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-              <div style="font-size:13px; font-weight:700; color:var(--text-primary);">
-                Daftar Foto Galeri Koleksi Ini (${galleryItems.length})
-              </div>
-              <div style="font-size:11px; color:var(--text-muted);">
-                Klik gambar untuk memperbesar resolusi penuh (Lightbox)
-              </div>
-            </div>
-
-            ${galleryItems.length === 0 ? `
-              <div style="text-align:center; padding:28px 16px; background:rgba(255,255,255,0.015); border:1px dashed var(--border); border-radius:8px; color:var(--text-muted); font-size:12px;">
-                <div style="font-size:24px; margin-bottom:6px;">📸</div>
-                Belum ada foto dokumentasi tambahan untuk item ini.<br>
-                Gunakan form di atas untuk mengunggah foto watermark, holder slab grading, atau detail koin.
-              </div>
-            ` : `
-              <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:12px;">
-                ${galleryItems.map(gf => `
-                  <div style="background:rgba(18,21,28,0.95); border:1px solid var(--border); border-radius:8px; padding:8px; text-align:center; display:flex; flex-direction:column; justify-content:space-between;">
-                    <div>
-                      <div style="width:100%; height:90px; border-radius:5px; overflow:hidden; background:#000; display:flex; align-items:center; justify-content:center; cursor:zoom-in; border:1px solid rgba(212,175,55,0.2);" onclick="openGlobalLightbox('${escapeHtml(gf.foto_path)}', '${escapeHtml(item.nama_item + ' - ' + gf.label)}')">
-                        <img src="${escapeHtml(gf.foto_path)}" style="max-width:100%; max-height:100%; object-fit:cover;" title="Klik untuk memperbesar">
-                      </div>
-                      <div style="font-size:10px; font-weight:700; color:var(--gold-light); text-transform:uppercase; margin-top:6px; letter-spacing:0.5px;">
-                        ${escapeHtml(gf.label || 'detail')}
-                      </div>
-                      ${gf.catatan ? `<div style="font-size:9.5px; color:var(--text-secondary); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(gf.catatan)}">${escapeHtml(gf.catatan)}</div>` : ''}
-                    </div>
-                    <button type="button" class="btn btn-danger btn-sm" style="margin-top:8px; font-size:10.5px; padding:3px 8px; width:100%;" onclick="deleteGalleryPhoto(${id}, ${gf.id}, '${escapeHtml(namaItem)}')">
-                      🗑️ Hapus Foto
-                    </button>
-                  </div>
-                `).join('')}
-              </div>
-            `}
-          </div>
-        </div>
+        ${SmartPhotoManager.renderSection('modal', { initialObvUrl: fotoObv, initialRevUrl: fotoRev, showSupporting: true })}
       </div>
     `;
 
     const footer = `
-      <button type="button" class="btn btn-secondary" onclick="closeModal()">Selesai &amp; Tutup</button>
+      <button type="button" class="btn btn-secondary" onclick="closeModal()">Batal</button>
+      <button type="button" class="btn btn-primary" id="btnSaveAllModalPhotos" onclick="submitUploadFoto(${id})">
+        💾 Simpan Perubahan Foto (OBV, REV &amp; Pendukung)
+      </button>
     `;
 
     openModal({
@@ -1121,6 +1002,18 @@ async function showUploadFotoModal(id, namaItem, activeTab = 'tab-gallery') {
       footer,
       size: 'lg'
     });
+
+    SmartPhotoManager.initContext('modal', {
+      koleksiId: id,
+      initialObvUrl: fotoObv,
+      initialRevUrl: fotoRev,
+      existingGallery: galleryItems,
+      showSupporting: true
+    });
+
+    if (activeTab === 'tab-gallery') {
+      SmartPhotoManager.setActiveTarget('modal', 'support', true);
+    }
   } catch (err) {
     showToast('Gagal memuat manajer foto: ' + err.message, 'error');
   }
@@ -1248,29 +1141,41 @@ function handleModalRevSelect(e) {
 }
 
 async function submitUploadFoto(id) {
-  if (!uploadObvFileHolder && !uploadRevFileHolder) {
-    showToast('Pilih setidaknya satu foto (Obverse atau Reverse) terlebih dahulu.', 'warning');
+  const ctx = SmartPhotoManager.getContext('modal');
+  const hasObv = Boolean(ctx.obvFile || uploadObvFileHolder);
+  const hasRev = Boolean(ctx.revFile || uploadRevFileHolder);
+  const hasSup = Boolean(ctx.supportingQueue && ctx.supportingQueue.length > 0);
+
+  if (!hasObv && !hasRev && !hasSup) {
+    showToast('Belum ada foto baru (OBV, REV, atau Gambar Pendukung) yang dipilih/di-paste.', 'info');
+    closeModal();
     return;
   }
 
+  const btn = document.getElementById('btnSaveAllModalPhotos');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Menyimpan Foto...';
+  }
+
   try {
-    if (uploadObvFileHolder) {
-      const fd = new FormData();
-      fd.append('file', uploadObvFileHolder);
-      fd.append('foto', uploadObvFileHolder);
-      await API.upload(`/koleksi/${id}/foto?tipe=obv`, fd);
-    }
-    if (uploadRevFileHolder) {
-      const fd = new FormData();
-      fd.append('file', uploadRevFileHolder);
-      fd.append('foto', uploadRevFileHolder);
-      await API.upload(`/koleksi/${id}/foto?tipe=rev`, fd);
-    }
-    showToast('Foto utama koleksi berhasil disimpan!', 'success');
+    if (!ctx.obvFile && uploadObvFileHolder) ctx.obvFile = uploadObvFileHolder;
+    if (!ctx.revFile && uploadRevFileHolder) ctx.revFile = uploadRevFileHolder;
+    await SmartPhotoManager.uploadAllForKoleksi('modal', id);
+    showToast('Foto OBV, REV & Gambar Pendukung berhasil disimpan!', 'success');
     closeModal();
-    loadKoleksi(koleksiCurrentPage);
+    if (document.getElementById('koleksiTableContainer')) {
+      loadKoleksi(koleksiCurrentPage);
+    }
+    if (typeof currentBatchId !== 'undefined' && currentBatchId && document.getElementById('batchRightPanel')) {
+      selectBatch(currentBatchId);
+    }
   } catch (err) {
     showToast('Gagal mengunggah foto: ' + err.message, 'error');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '💾 Simpan Perubahan Foto (OBV, REV & Pendukung)';
+    }
   }
 }
 

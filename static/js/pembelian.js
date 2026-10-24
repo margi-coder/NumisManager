@@ -117,34 +117,7 @@ async function loadPembelianSingle() {
               </div>
             </div>
 
-            <div class="form-group">
-              <label class="form-label">Foto Item (Obverse / Depan &amp; Reverse / Belakang)</label>
-              <div class="dual-photo-grid">
-                <!-- Obverse Photo -->
-                <div class="photo-box-card" id="spObvZone" onclick="document.getElementById('spObvFileInput').click()">
-                  <input type="file" id="spObvFileInput" accept="image/*" style="display:none" onchange="handleSingleObvSelect(event)">
-                  <div id="spObvPrompt">
-                    <div style="font-size:28px; margin-bottom:4px;">🪙</div>
-                    <div style="font-weight:600; font-size:12.5px; color:var(--text-primary);">Tampak Depan (OBV)</div>
-                    <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Klik untuk pilih foto</div>
-                  </div>
-                  <img id="spObvPreview" class="photo-box-preview" style="display:none;" alt="Preview Obverse">
-                  <div class="photo-box-label">📸 Obverse (Muka)</div>
-                </div>
-
-                <!-- Reverse Photo -->
-                <div class="photo-box-card" id="spRevZone" onclick="document.getElementById('spRevFileInput').click()">
-                  <input type="file" id="spRevFileInput" accept="image/*" style="display:none" onchange="handleSingleRevSelect(event)">
-                  <div id="spRevPrompt">
-                    <div style="font-size:28px; margin-bottom:4px;">🪙</div>
-                    <div style="font-weight:600; font-size:12.5px; color:var(--text-primary);">Tampak Belakang (REV)</div>
-                    <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Klik untuk pilih foto</div>
-                  </div>
-                  <img id="spRevPreview" class="photo-box-preview" style="display:none;" alt="Preview Reverse">
-                  <div class="photo-box-label">📸 Reverse (Belakang)</div>
-                </div>
-              </div>
-            </div>
+            ${SmartPhotoManager.renderSection('sp', { showSupporting: true })}
           </div>
 
           <!-- Right Column: Biaya, Supplier, & Perhitungan HPP -->
@@ -264,7 +237,8 @@ async function loadPembelianSingle() {
   loadSuppliersIntoDropdown('spSupplier');
   loadGroupItemsIntoDropdown('spGroupItem');
 
-  // Drag and drop photo zone setup
+  // Setup SmartPhotoManager (Drag & Drop + Copy/Paste OBV, REV & Supporting)
+  SmartPhotoManager.initContext('sp', { showSupporting: true });
 
   // Initial calculation
   calculateSingleHpp();
@@ -376,23 +350,12 @@ function resetSingleForm() {
   singlePhotoObvFile = null;
   singlePhotoRevFile = null;
 
-  const obvImg = document.getElementById('spObvPreview');
-  const obvPrompt = document.getElementById('spObvPrompt');
-  const obvZone = document.getElementById('spObvZone');
-  if (obvImg && obvPrompt) {
-    obvImg.style.display = 'none';
-    obvPrompt.style.display = 'block';
-    if (obvZone) obvZone.classList.remove('has-image');
-  }
-
-  const revImg = document.getElementById('spRevPreview');
-  const revPrompt = document.getElementById('spRevPrompt');
-  const revZone = document.getElementById('spRevZone');
-  if (revImg && revPrompt) {
-    revImg.style.display = 'none';
-    revPrompt.style.display = 'block';
-    if (revZone) revZone.classList.remove('has-image');
-  }
+  SmartPhotoManager.clearSlot('sp', 'obv');
+  SmartPhotoManager.clearSlot('sp', 'rev');
+  const ctx = SmartPhotoManager.getContext('sp');
+  ctx.supportingQueue = [];
+  SmartPhotoManager.renderSupportingQueue('sp');
+  SmartPhotoManager.setActiveTarget('sp', 'obv', true);
 
   calculateSingleHpp();
 }
@@ -464,24 +427,8 @@ async function submitSinglePurchase() {
     const newItem = await API.post('/koleksi', payload);
     const itemId = newItem.id || newItem.item_id;
 
-    // Upload Obverse photo if chosen
-    if (singlePhotoObvFile && itemId) {
-      const formData = new FormData();
-      formData.append('file', singlePhotoObvFile);
-      formData.append('foto', singlePhotoObvFile);
-      await API.upload(`/koleksi/${itemId}/foto?tipe=obv`, formData).catch(err => {
-        console.warn('Gagal mengunggah foto obverse:', err);
-      });
-    }
-
-    // Upload Reverse photo if chosen
-    if (singlePhotoRevFile && itemId) {
-      const formData = new FormData();
-      formData.append('file', singlePhotoRevFile);
-      formData.append('foto', singlePhotoRevFile);
-      await API.upload(`/koleksi/${itemId}/foto?tipe=rev`, formData).catch(err => {
-        console.warn('Gagal mengunggah foto reverse:', err);
-      });
+    if (itemId) {
+      await SmartPhotoManager.uploadAllForKoleksi('sp', itemId);
     }
 
     showToast('Item berhasil ditambahkan ke inventaris koleksi!', 'success');
@@ -1231,6 +1178,9 @@ function renderBatchItemRows(items, batchId, isReceived = true) {
         <td style="font-weight:700; color:var(--gold-primary);">${formatRupiah(hppPcs)}</td>
         <td style="text-align:center;">
           <div class="td-actions" style="justify-content:center;">
+            <button class="btn btn-secondary btn-icon" onclick="showUploadFotoModal(${it.id}, '${escapeHtml(it.nama_item || 'Item Batch')}')" title="Kelola Foto OBV, REV &amp; Gambar Pendukung">
+              📸
+            </button>
             <button class="btn btn-secondary btn-icon" onclick="showEditBatchItemModal(${it.id}, ${batchId})" title="Edit Item Batch">
               ✏️
             </button>
@@ -1482,33 +1432,7 @@ function showAddItemToBatchModal(batchId) {
         </div>
       </div>
 
-      <!-- Upload Foto OBV & REV -->
-      <div class="form-group">
-        <label class="form-label">Foto Item (Obverse &amp; Reverse)</label>
-        <div class="dual-photo-grid">
-          <div class="photo-box-card" id="baiObvZone" onclick="document.getElementById('baiObvInput').click()">
-            <input type="file" id="baiObvInput" accept="image/*" style="display:none" onchange="handleBatchAddObvSelect(event)">
-            <div id="baiObvPrompt">
-              <div style="font-size:26px; margin-bottom:4px;">🪙</div>
-              <div style="font-weight:600; font-size:12px; color:var(--text-primary);">Tampak Depan (OBV)</div>
-              <div style="font-size:11px; color:var(--text-muted);">Pilih foto depan</div>
-            </div>
-            <img id="baiObvPreview" class="photo-box-preview" style="display:none;" alt="OBV">
-            <div class="photo-box-label">📸 Obverse (Muka)</div>
-          </div>
-
-          <div class="photo-box-card" id="baiRevZone" onclick="document.getElementById('baiRevInput').click()">
-            <input type="file" id="baiRevInput" accept="image/*" style="display:none" onchange="handleBatchAddRevSelect(event)">
-            <div id="baiRevPrompt">
-              <div style="font-size:26px; margin-bottom:4px;">🪙</div>
-              <div style="font-weight:600; font-size:12px; color:var(--text-primary);">Tampak Belakang (REV)</div>
-              <div style="font-size:11px; color:var(--text-muted);">Pilih foto belakang</div>
-            </div>
-            <img id="baiRevPreview" class="photo-box-preview" style="display:none;" alt="REV">
-            <div class="photo-box-label">📸 Reverse (Belakang)</div>
-          </div>
-        </div>
-      </div>
+      ${SmartPhotoManager.renderSection('bai', { showSupporting: true })}
     </form>
   `;
 
@@ -1524,6 +1448,7 @@ function showAddItemToBatchModal(batchId) {
     size: 'lg'
   });
 
+  SmartPhotoManager.initContext('bai', { showSupporting: true });
   loadGroupItemsIntoDropdown('biGroupItem');
   calcBatchAddUnitHint();
 }
@@ -1618,17 +1543,8 @@ async function submitItemToBatch(batchId) {
     const res = await API.post('/koleksi', payload);
     const newId = res.id || res.item_id;
 
-    if (newId && batchAddObvFile) {
-      const fd = new FormData();
-      fd.append('file', batchAddObvFile);
-      fd.append('foto', batchAddObvFile);
-      await API.upload(`/koleksi/${newId}/foto?tipe=obv`, fd).catch(() => {});
-    }
-    if (newId && batchAddRevFile) {
-      const fd = new FormData();
-      fd.append('file', batchAddRevFile);
-      fd.append('foto', batchAddRevFile);
-      await API.upload(`/koleksi/${newId}/foto?tipe=rev`, fd).catch(() => {});
+    if (newId) {
+      await SmartPhotoManager.uploadAllForKoleksi('bai', newId);
     }
 
     showToast('Item berhasil ditambahkan ke batch!', 'success');
@@ -1747,33 +1663,7 @@ async function showEditBatchItemModal(itemId, batchId) {
           </span>
         </label>
 
-        <!-- Upload Foto OBV & REV -->
-        <div class="form-group">
-          <label class="form-label">Foto Item (Obverse / Depan &amp; Reverse / Belakang)</label>
-          <div class="dual-photo-grid">
-            <div class="photo-box-card ${fotoObv ? 'has-image' : ''}" id="beiObvZone" onclick="document.getElementById('beiObvInput').click()">
-              <input type="file" id="beiObvInput" accept="image/*" style="display:none" onchange="handleBatchEditObvSelect(event)">
-              <div id="beiObvPrompt" style="${fotoObv ? 'display:none;' : ''}">
-                <div style="font-size:26px; margin-bottom:4px;">🪙</div>
-                <div style="font-weight:600; font-size:12px; color:var(--text-primary);">Tampak Depan (OBV)</div>
-                <div style="font-size:11px; color:var(--text-muted);">Pilih foto depan</div>
-              </div>
-              <img id="beiObvPreview" class="photo-box-preview" src="${fotoObv ? escapeHtml(fotoObv) : ''}" style="${fotoObv ? 'display:block;' : 'display:none;'}" alt="OBV">
-              <div class="photo-box-label">📸 Obverse (Muka)</div>
-            </div>
-
-            <div class="photo-box-card ${fotoRev ? 'has-image' : ''}" id="beiRevZone" onclick="document.getElementById('beiRevInput').click()">
-              <input type="file" id="beiRevInput" accept="image/*" style="display:none" onchange="handleBatchEditRevSelect(event)">
-              <div id="beiRevPrompt" style="${fotoRev ? 'display:none;' : ''}">
-                <div style="font-size:26px; margin-bottom:4px;">🪙</div>
-                <div style="font-weight:600; font-size:12px; color:var(--text-primary);">Tampak Belakang (REV)</div>
-                <div style="font-size:11px; color:var(--text-muted);">Pilih foto belakang</div>
-              </div>
-              <img id="beiRevPreview" class="photo-box-preview" src="${fotoRev ? escapeHtml(fotoRev) : ''}" style="${fotoRev ? 'display:block;' : 'display:none;'}" alt="REV">
-              <div class="photo-box-label">📸 Reverse (Belakang)</div>
-            </div>
-          </div>
-        </div>
+        ${SmartPhotoManager.renderSection('bei', { initialObvUrl: fotoObv, initialRevUrl: fotoRev, showSupporting: true })}
       </form>
     `;
 
@@ -1789,6 +1679,13 @@ async function showEditBatchItemModal(itemId, batchId) {
       size: 'lg'
     });
 
+    SmartPhotoManager.initContext('bei', {
+      koleksiId: itemId,
+      initialObvUrl: fotoObv,
+      initialRevUrl: fotoRev,
+      existingGallery: item.gallery_fotos || [],
+      showSupporting: true
+    });
     loadGroupItemsIntoDropdown('ebiGroupItem', item.group_id);
     calcBatchEditUnitHint();
   } catch (err) {
@@ -1883,19 +1780,7 @@ async function submitUpdateBatchItem(itemId, batchId) {
 
   try {
     await API.put(`/koleksi/${itemId}`, payload);
-
-    if (batchEditObvFile) {
-      const fd = new FormData();
-      fd.append('file', batchEditObvFile);
-      fd.append('foto', batchEditObvFile);
-      await API.upload(`/koleksi/${itemId}/foto?tipe=obv`, fd).catch(() => {});
-    }
-    if (batchEditRevFile) {
-      const fd = new FormData();
-      fd.append('file', batchEditRevFile);
-      fd.append('foto', batchEditRevFile);
-      await API.upload(`/koleksi/${itemId}/foto?tipe=rev`, fd).catch(() => {});
-    }
+    await SmartPhotoManager.uploadAllForKoleksi('bei', itemId);
 
     showToast('Item batch berhasil diperbarui!', 'success');
     closeModal();

@@ -1396,3 +1396,138 @@ tbody tr:nth-child(-n+3) .photo-hover-tooltip {
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.8);
 }
 
+/* ==========================================================================
+   Smart Photo Dropzone, Clipboard Paste & Supporting Gallery Styles
+   ========================================================================== */
+.photo-box-card {
+  user-select: none;
+  outline: none;
+}
+
+.photo-box-card.drag-over,
+.supporting-drop-zone.drag-over {
+  border-color: #4caf50 !important;
+  border-style: solid !important;
+  background: rgba(76, 175, 80, 0.14) !important;
+  box-shadow: 0 0 20px rgba(76, 175, 80, 0.3);
+  transform: translateY(-1px);
+}
+
+.photo-box-card.paste-target-active,
+.supporting-drop-zone.paste-target-active {
+  border-color: var(--gold-light) !important;
+  background: rgba(212, 175, 55, 0.07);
+  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.22);
+}
+
+.photo-paste-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: rgba(10, 12, 16, 0.85);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  pointer-events: none;
+  transition: all 0.2s ease;
+}
+
+.photo-box-card.paste-target-active .photo-paste-badge,
+.supporting-drop-zone.paste-target-active .photo-paste-badge {
+  background: rgba(212, 175, 55, 0.22);
+  color: var(--gold-light);
+  border-color: var(--gold-primary);
+}
+
+.photo-box-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+  z-index: 2;
+}
+
+.photo-mini-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.18s ease;
+}
+
+.photo-mini-btn:hover {
+  border-color: var(--gold-primary);
+  color: var(--gold-light);
+  background: rgba(212, 175, 55, 0.14);
+}
+
+.photo-mini-btn.btn-clear-photo {
+  color: var(--danger);
+  border-color: rgba(224, 92, 92, 0.35);
+}
+
+.photo-mini-btn.btn-clear-photo:hover {
+  background: rgba(224, 92, 92, 0.15);
+  border-color: var(--danger);
+}
+
+.supporting-drop-zone {
+  position: relative;
+  background: rgba(18, 21, 28, 0.75);
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.22s ease;
+  user-select: none;
+  outline: none;
+}
+
+.supporting-drop-zone:hover {
+  border-color: var(--gold-primary);
+  background: rgba(212, 175, 55, 0.04);
+}
+
+.supporting-queue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.supporting-queue-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(18, 21, 28, 0.95);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  position: relative;
+}
+
+.supporting-queue-thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  background: #08090d;
+  border-radius: 6px;
+  border: 1px solid var(--border-gold);
+  flex-shrink: 0;
+  cursor: zoom-in;
+}
+
+

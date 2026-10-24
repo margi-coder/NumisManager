@@ -1,10 +1,12 @@
 from datetime import datetime
+import base64
 import math
+import urllib.request
 import uuid
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 import aiofiles
 import sqlite3
 from database.db import get_db
@@ -426,6 +428,49 @@ def delete_koleksi(
     conn.commit()
     return {"message": "Item koleksi berhasil dihapus"}
 
+@router.post("/fetch-remote-image")
+def fetch_remote_image(
+    payload: Dict[str, Any],
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Mengunduh gambar dari URL eksternal (proxy anti-CORS untuk copy-paste / drag dari website lain)."""
+    url = str(payload.get("url") or "").strip()
+    if not url:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="URL gambar kosong")
+
+    if url.startswith("data:image/"):
+        try:
+            header, b64_data = url.split(",", 1)
+            mime_type = header.split(";")[0].replace("data:", "") or "image/png"
+            raw_bytes = base64.b64decode(b64_data)
+            return Response(content=raw_bytes, media_type=mime_type)
+        except Exception as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Data URI tidak valid: {e}")
+
+    if not (url.startswith("http://") or url.startswith("https://")):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="URL harus diawali http:// atau https://")
+
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                "Referer": url
+            }
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            content_type = (resp.headers.get("Content-Type") or "image/jpeg").split(";")[0].strip().lower()
+            raw_bytes = resp.read(20 * 1024 * 1024)  # batas aman 20 MB
+            if not content_type.startswith("image/"):
+                content_type = "image/jpeg"
+            return Response(content=raw_bytes, media_type=content_type)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Gagal mengambil gambar dari URL tersebut: {str(e)}"
+        )
+
 @router.post("/{koleksi_id}/foto")
 async def upload_foto_koleksi(
     koleksi_id: int,
@@ -445,8 +490,18 @@ async def upload_foto_koleksi(
         )
 
     ext = Path(file.filename or "").suffix.lower()
-    if ext not in [".jpg", ".jpeg", ".png", ".webp"]:
+    if ext == ".jfif":
         ext = ".jpg"
+    if ext not in [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".svg", ".avif"]:
+        ctype = (file.content_type or "").lower()
+        if "png" in ctype:
+            ext = ".png"
+        elif "webp" in ctype:
+            ext = ".webp"
+        elif "gif" in ctype:
+            ext = ".gif"
+        else:
+            ext = ".jpg"
 
     tipe_clean = "rev" if tipe.lower().strip() == "rev" else "obv"
     unique_filename = f"{uuid.uuid4().hex}_{tipe_clean}{ext}"
@@ -607,12 +662,21 @@ async def upload_gallery_foto(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item koleksi tidak ditemukan")
 
     STATIC_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    ext = Path(foto.filename).suffix.lower()
-    if ext not in [".jpg", ".jpeg", ".png", ".webp", ".svg"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Format file tidak didukung. Gunakan JPG, PNG, WEBP, atau SVG."
-        )
+    ext = Path(foto.filename or "").suffix.lower()
+    if ext == ".jfif":
+        ext = ".jpg"
+    if ext not in [".jpg", ".jpeg", ".png", ".webp", ".svg", ".gif", ".bmp", ".avif"]:
+        ctype = (foto.content_type or "").lower()
+        if "png" in ctype:
+            ext = ".png"
+        elif "webp" in ctype:
+            ext = ".webp"
+        elif "gif" in ctype:
+            ext = ".gif"
+        elif "svg" in ctype:
+            ext = ".svg"
+        else:
+            ext = ".jpg"
 
     unique_filename = f"gal_{koleksi_id}_{uuid.uuid4().hex[:8]}{ext}"
     file_path = STATIC_UPLOADS_DIR / unique_filename

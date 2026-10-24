@@ -45,7 +45,7 @@ STATIC_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 @router.get("/")
 def list_koleksi(
     page: int = Query(1, ge=1, description="Halaman"),
-    limit: int = Query(20, ge=1, le=500, description="Limit per halaman"),
+    limit: int = Query(20, ge=1, le=2000, description="Limit per halaman"),
     search: Optional[str] = Query(None, description="Pencarian nama, nomor seri, tahun, denominasi"),
     jenis: Optional[str] = Query(None, description="Filter jenis (koin, uang_kertas, medali, token)"),
     grade: Optional[str] = Query(None, description="Filter grade"),

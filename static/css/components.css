@@ -1530,4 +1530,285 @@ tbody tr:nth-child(-n+3) .photo-hover-tooltip {
   cursor: zoom-in;
 }
 
+/* ==========================================================================
+   Koleksi & Stok Ultra-Compact Table Columns
+   ========================================================================== */
+.koleksi-compact-table {
+  width: 100%;
+  border-collapse: collapse;
+}
 
+.koleksi-compact-table thead th.col-nama,
+.koleksi-compact-table tbody td.col-nama {
+  width: 55%;
+  padding: 6px 10px;
+}
+
+.koleksi-compact-table thead th.col-sn,
+.koleksi-compact-table tbody td.col-sn {
+  width: 38%;
+  padding: 6px 8px;
+}
+
+.koleksi-compact-table thead th.col-tight,
+.koleksi-compact-table tbody td.col-tight {
+  width: 1%;
+  white-space: nowrap;
+  padding: 6px 7px !important;
+}
+
+.koleksi-compact-table thead th.col-aksi,
+.koleksi-compact-table tbody td.col-aksi {
+  width: 1%;
+  white-space: nowrap;
+  padding: 6px 8px !important;
+  text-align: center;
+}
+
+.koleksi-compact-table .td-actions {
+  gap: 3px;
+  justify-content: center;
+}
+
+/* ==========================================================================
+   Detail Modal & Lightbox Photo Carousel Navigation (Left / Right)
+   ========================================================================== */
+.detail-photo-carousel-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(10, 12, 16, 0.75);
+  border: 1px solid var(--border-gold);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.detail-photo-stage {
+  position: relative;
+  width: 100%;
+  height: 230px;
+  background: #07090d;
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  user-select: none;
+}
+
+.detail-photo-stage img {
+  max-width: calc(100% - 96px);
+  max-height: 210px;
+  object-fit: contain;
+  cursor: zoom-in;
+  border-radius: 4px;
+  transition: transform 0.2s ease;
+}
+
+.detail-photo-nav-btn,
+.lightbox-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(18, 21, 28, 0.88);
+  border: 1px solid var(--border-gold);
+  color: var(--gold-light);
+  font-size: 16px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 5;
+  transition: all 0.18s ease;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+  user-select: none;
+}
+
+.detail-photo-nav-btn:hover,
+.lightbox-nav-btn:hover {
+  background: var(--gold-primary);
+  color: #0a0c10;
+  border-color: var(--gold-light);
+  box-shadow: 0 0 16px rgba(212, 175, 55, 0.45);
+  transform: translateY(-50%) scale(1.06);
+}
+
+.detail-photo-nav-btn.prev,
+.lightbox-nav-btn.prev {
+  left: 10px;
+}
+
+.detail-photo-nav-btn.next,
+.lightbox-nav-btn.next {
+  right: 10px;
+}
+
+.lightbox-nav-btn {
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+}
+
+.detail-photo-caption-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 2px 4px;
+}
+
+.detail-photo-thumb-strip,
+.lightbox-thumb-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 2px;
+  align-items: center;
+}
+
+.detail-photo-thumb-item,
+.lightbox-thumb-item {
+  width: 86px;
+  flex-shrink: 0;
+  cursor: pointer;
+  border-radius: 7px;
+  border: 1.5px solid var(--border);
+  background: #0a0c10;
+  padding: 3px;
+  text-align: center;
+  transition: all 0.18s ease;
+  opacity: 0.65;
+}
+
+.detail-photo-thumb-item:hover,
+.lightbox-thumb-item:hover {
+  opacity: 0.92;
+  border-color: rgba(212, 175, 55, 0.5);
+}
+
+.detail-photo-thumb-item.active,
+.lightbox-thumb-item.active {
+  opacity: 1;
+  border-color: var(--gold-light);
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.35);
+  background: rgba(212, 175, 55, 0.1);
+}
+
+.detail-photo-thumb-item img,
+.lightbox-thumb-item img {
+  width: 100%;
+  height: 48px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: #06080b;
+}
+
+.detail-photo-thumb-label,
+.lightbox-thumb-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--gold-light);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+/* ==========================================================================
+   Searchable Select Combobox (Penjualan Item Picker)
+   ========================================================================== */
+.searchable-select-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.searchable-select-input {
+  padding-right: 64px !important;
+  cursor: text;
+}
+
+.searchable-select-actions {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  z-index: 2;
+}
+
+.searchable-select-btn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+
+.searchable-select-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--gold-light);
+}
+
+.searchable-select-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 290px;
+  overflow-y: auto;
+  background: #141822;
+  border: 1px solid var(--gold-primary);
+  border-radius: var(--radius-md);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.85), 0 0 16px rgba(212, 175, 55, 0.15);
+  z-index: 1080;
+  display: none;
+}
+
+.searchable-select-menu.open {
+  display: block;
+}
+
+.searchable-select-option {
+  padding: 9px 13px;
+  border-bottom: 1px solid rgba(42, 47, 66, 0.45);
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+
+.searchable-select-option:last-child {
+  border-bottom: none;
+}
+
+.searchable-select-option:hover,
+.searchable-select-option.highlighted {
+  background: rgba(212, 175, 55, 0.15);
+}
+
+.searchable-select-option.selected {
+  background: rgba(212, 175, 55, 0.22);
+  border-left: 3px solid var(--gold-light);
+}
+
+.searchable-select-empty {
+  padding: 14px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}

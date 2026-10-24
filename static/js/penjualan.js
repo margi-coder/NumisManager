@@ -37,9 +37,23 @@ async function loadPenjualan(page = 1) {
             <div>
               <div class="form-group">
                 <label class="form-label">Pilih Item Koleksi dari Stok <span class="required">*</span></label>
-                <select id="nsKoleksiSelect" class="form-select" onchange="handleSaleKoleksiChange()" required>
-                  <option value="">-- Memuat daftar stok item... --</option>
-                </select>
+                <div class="searchable-select-wrapper" id="nsKoleksiCombobox">
+                  <input type="hidden" id="nsKoleksiSelect" value="">
+                  <input type="text" id="nsKoleksiSearchInput" class="form-control searchable-select-input"
+                         placeholder="-- Pilih atau Ketik Cari Item Koleksi (Nama, Seri, Kode, Tahun, Grade) --"
+                         autocomplete="off"
+                         onfocus="openSaleKoleksiDropdown()"
+                         onclick="openSaleKoleksiDropdown()"
+                         oninput="handleSaleKoleksiSearchInput(event)"
+                         onkeydown="handleSaleKoleksiKeydown(event)">
+                  <div class="searchable-select-actions">
+                    <button type="button" id="nsKoleksiClearBtn" class="searchable-select-btn" style="display:none;" onclick="clearSaleKoleksiSelection(event)" title="Hapus pilihan / Reset pencarian">✕</button>
+                    <button type="button" id="nsKoleksiToggleBtn" class="searchable-select-btn" onclick="toggleSaleKoleksiDropdown(event)" title="Buka / Tutup Daftar Pilihan">▾</button>
+                  </div>
+                  <div id="nsKoleksiDropdownMenu" class="searchable-select-menu">
+                    <div class="searchable-select-empty">Memuat daftar stok item...</div>
+                  </div>
+                </div>
               </div>
 
               <div class="data-grid-2">
@@ -170,31 +184,229 @@ function resetPenjualanFilter() {
   fetchPenjualanHistory(1);
 }
 
+let _saleDropdownHighlightIdx = -1;
+let _saleDropdownFilteredItems = [];
+
+function getSaleKoleksiOptionLabel(it) {
+  const sisa = it.qty_tersisa !== undefined ? it.qty_tersisa : (it.qty - (it.qty_terjual || 0));
+  return `${it.nama_item} | Grade: ${it.grade || '-'} | Sisa: ${sisa} pcs | HPP: ${formatRupiah(it.hpp_per_pcs)}`;
+}
+
 async function loadKoleksiForSale() {
-  const select = document.getElementById('nsKoleksiSelect');
-  if (!select) return;
+  const hiddenInput = document.getElementById('nsKoleksiSelect');
+  const searchInput = document.getElementById('nsKoleksiSearchInput');
+  const menu = document.getElementById('nsKoleksiDropdownMenu');
+  if (!hiddenInput || !menu) return;
 
   try {
-    const res = await API.get('/koleksi?limit=100&status_koleksi=stock_jual');
-    const items = res.items || res.data || (Array.isArray(res) ? res : []);
-    penjualanKoleksiItems = items;
-
-    let html = '<option value="">-- Pilih Item Koleksi --</option>';
-    items.forEach(it => {
+    const res = await API.get('/koleksi?limit=500&status_koleksi=stock_jual');
+    const rawItems = res.items || res.data || (Array.isArray(res) ? res : []);
+    penjualanKoleksiItems = rawItems.filter(it => {
       const sisa = it.qty_tersisa !== undefined ? it.qty_tersisa : (it.qty - (it.qty_terjual || 0));
-      if (sisa > 0) {
-        html += `<option value="${it.id}">
-          ${escapeHtml(it.nama_item)} | Grade: ${it.grade || '-'} | Sisa: ${sisa} pcs | HPP: ${formatRupiah(it.hpp_per_pcs)}
-        </option>`;
-      }
+      return sisa > 0;
     });
 
-    select.innerHTML = html;
+    renderSaleKoleksiDropdownOptions('');
   } catch (err) {
     console.error('Failed to load koleksi for sales:', err);
-    select.innerHTML = '<option value="">Gagal memuat item koleksi</option>';
+    menu.innerHTML = '<div class="searchable-select-empty">Gagal memuat item koleksi</div>';
+    if (searchInput) searchInput.placeholder = 'Gagal memuat daftar stok item';
   }
 }
+
+function renderSaleKoleksiDropdownOptions(query = '') {
+  const menu = document.getElementById('nsKoleksiDropdownMenu');
+  const hiddenInput = document.getElementById('nsKoleksiSelect');
+  if (!menu) return;
+
+  const q = (query || '').trim().toLowerCase();
+  const selectedId = hiddenInput ? parseInt(hiddenInput.value || '0', 10) : 0;
+
+  _saleDropdownFilteredItems = penjualanKoleksiItems.filter(it => {
+    if (!q) return true;
+    const haystack = [
+      it.nama_item || '',
+      it.nomor_seri || '',
+      it.kode_item || '',
+      it.tahun || '',
+      it.grade || '',
+      it.group_nama || '',
+      it.negara || ''
+    ].join(' ').toLowerCase();
+    return haystack.includes(q);
+  });
+
+  if (_saleDropdownFilteredItems.length === 0) {
+    menu.innerHTML = `<div class="searchable-select-empty">Tidak ditemukan item stok yang cocok dengan "${escapeHtml(query)}"</div>`;
+    _saleDropdownHighlightIdx = -1;
+    return;
+  }
+
+  if (_saleDropdownHighlightIdx >= _saleDropdownFilteredItems.length) {
+    _saleDropdownHighlightIdx = 0;
+  }
+
+  menu.innerHTML = _saleDropdownFilteredItems.map((it, idx) => {
+    const sisa = it.qty_tersisa !== undefined ? it.qty_tersisa : (it.qty - (it.qty_terjual || 0));
+    const isSel = it.id === selectedId;
+    const isHl = idx === _saleDropdownHighlightIdx;
+    const subMeta = [
+      it.nomor_seri ? `SN: ${it.nomor_seri}` : '',
+      it.kode_item ? it.kode_item : '',
+      it.tahun ? `Thn: ${it.tahun}` : '',
+      it.group_nama ? `🗂️ ${it.group_nama}` : ''
+    ].filter(Boolean).join(' • ');
+
+    return `
+      <div class="searchable-select-option ${isSel ? 'selected' : ''} ${isHl ? 'highlighted' : ''}"
+           data-idx="${idx}"
+           onmousedown="event.preventDefault(); selectSaleKoleksiItem(${it.id})">
+        <div style="font-weight:600; color:var(--text-primary);">
+          ${escapeHtml(it.nama_item)} <span style="color:var(--text-secondary); font-weight:400;">|</span>
+          <span style="color:var(--gold-light);">Grade: ${escapeHtml(it.grade || '-')}</span> <span style="color:var(--text-secondary); font-weight:400;">|</span>
+          <span style="color:var(--success);">Sisa: ${sisa} pcs</span> <span style="color:var(--text-secondary); font-weight:400;">|</span>
+          <span>HPP: ${formatRupiah(it.hpp_per_pcs)}</span>
+        </div>
+        ${subMeta ? `<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${escapeHtml(subMeta)}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function openSaleKoleksiDropdown() {
+  const menu = document.getElementById('nsKoleksiDropdownMenu');
+  const searchInput = document.getElementById('nsKoleksiSearchInput');
+  const hiddenInput = document.getElementById('nsKoleksiSelect');
+  if (!menu) return;
+
+  // Jika sudah ada item terpilih dan teks input masih sama persis dengan label item terpilih, tampilkan semua opsi agar mudah ganti pilihan
+  const selectedItem = penjualanKoleksiItems.find(it => String(it.id) === String(hiddenInput?.value || ''));
+  const currentVal = searchInput?.value || '';
+  const queryToFilter = (selectedItem && currentVal === getSaleKoleksiOptionLabel(selectedItem)) ? '' : currentVal;
+
+  renderSaleKoleksiDropdownOptions(queryToFilter);
+  menu.classList.add('open');
+}
+
+function closeSaleKoleksiDropdown() {
+  const menu = document.getElementById('nsKoleksiDropdownMenu');
+  if (menu) menu.classList.remove('open');
+}
+
+function toggleSaleKoleksiDropdown(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('nsKoleksiDropdownMenu');
+  const searchInput = document.getElementById('nsKoleksiSearchInput');
+  if (!menu) return;
+  if (menu.classList.contains('open')) {
+    closeSaleKoleksiDropdown();
+  } else {
+    openSaleKoleksiDropdown();
+    if (searchInput) searchInput.focus();
+  }
+}
+
+function handleSaleKoleksiSearchInput(e) {
+  const val = e.target.value || '';
+  const hiddenInput = document.getElementById('nsKoleksiSelect');
+  const clearBtn = document.getElementById('nsKoleksiClearBtn');
+  if (clearBtn) clearBtn.style.display = val ? 'inline-flex' : 'none';
+
+  // Saat pengguna mengetik ulang, kosongkan ID terpilih sampai pengguna memilih dari daftar
+  if (hiddenInput && hiddenInput.value) {
+    hiddenInput.value = '';
+    handleSaleKoleksiChange();
+  }
+
+  _saleDropdownHighlightIdx = 0;
+  renderSaleKoleksiDropdownOptions(val);
+  const menu = document.getElementById('nsKoleksiDropdownMenu');
+  if (menu) menu.classList.add('open');
+}
+
+function selectSaleKoleksiItem(id) {
+  const item = penjualanKoleksiItems.find(it => Number(it.id) === Number(id));
+  const hiddenInput = document.getElementById('nsKoleksiSelect');
+  const searchInput = document.getElementById('nsKoleksiSearchInput');
+  const clearBtn = document.getElementById('nsKoleksiClearBtn');
+
+  if (hiddenInput) hiddenInput.value = item ? String(item.id) : '';
+  if (searchInput) searchInput.value = item ? getSaleKoleksiOptionLabel(item) : '';
+  if (clearBtn) clearBtn.style.display = item ? 'inline-flex' : 'none';
+
+  closeSaleKoleksiDropdown();
+  handleSaleKoleksiChange();
+}
+
+function clearSaleKoleksiSelection(e) {
+  if (e) e.stopPropagation();
+  const hiddenInput = document.getElementById('nsKoleksiSelect');
+  const searchInput = document.getElementById('nsKoleksiSearchInput');
+  const clearBtn = document.getElementById('nsKoleksiClearBtn');
+
+  if (hiddenInput) hiddenInput.value = '';
+  if (searchInput) {
+    searchInput.value = '';
+    searchInput.focus();
+  }
+  if (clearBtn) clearBtn.style.display = 'none';
+
+  _saleDropdownHighlightIdx = -1;
+  renderSaleKoleksiDropdownOptions('');
+  openSaleKoleksiDropdown();
+  handleSaleKoleksiChange();
+}
+
+function handleSaleKoleksiKeydown(e) {
+  const menu = document.getElementById('nsKoleksiDropdownMenu');
+  const isOpen = menu && menu.classList.contains('open');
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (!isOpen) {
+      openSaleKoleksiDropdown();
+    }
+    if (_saleDropdownFilteredItems.length > 0) {
+      _saleDropdownHighlightIdx = (_saleDropdownHighlightIdx + 1) % _saleDropdownFilteredItems.length;
+      renderSaleKoleksiDropdownOptions(document.getElementById('nsKoleksiSearchInput')?.value || '');
+      const hlEl = menu?.querySelector('.searchable-select-option.highlighted');
+      if (hlEl) hlEl.scrollIntoView({ block: 'nearest' });
+    }
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (!isOpen) {
+      openSaleKoleksiDropdown();
+    }
+    if (_saleDropdownFilteredItems.length > 0) {
+      _saleDropdownHighlightIdx = (_saleDropdownHighlightIdx - 1 + _saleDropdownFilteredItems.length) % _saleDropdownFilteredItems.length;
+      renderSaleKoleksiDropdownOptions(document.getElementById('nsKoleksiSearchInput')?.value || '');
+      const hlEl = menu?.querySelector('.searchable-select-option.highlighted');
+      if (hlEl) hlEl.scrollIntoView({ block: 'nearest' });
+    }
+  } else if (e.key === 'Enter') {
+    if (isOpen && _saleDropdownFilteredItems.length > 0) {
+      e.preventDefault();
+      const pickIdx = _saleDropdownHighlightIdx >= 0 ? _saleDropdownHighlightIdx : 0;
+      const picked = _saleDropdownFilteredItems[pickIdx];
+      if (picked) {
+        selectSaleKoleksiItem(picked.id);
+      }
+    }
+  } else if (e.key === 'Escape') {
+    if (isOpen) {
+      e.preventDefault();
+      closeSaleKoleksiDropdown();
+    }
+  }
+}
+
+// Tutup dropdown saat klik di luar area combobox
+document.addEventListener('mousedown', (e) => {
+  const box = document.getElementById('nsKoleksiCombobox');
+  if (box && !box.contains(e.target)) {
+    closeSaleKoleksiDropdown();
+  }
+});
 
 function handleSaleKoleksiChange() {
   const select = document.getElementById('nsKoleksiSelect');

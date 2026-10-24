@@ -292,17 +292,18 @@ function renderKoleksiTable(data, total, page) {
 
   let html = `
     <div class="table-wrapper table-compact">
-      <table>
+      <table class="koleksi-compact-table">
         <thead>
           <tr>
-            <th>Nama Item</th>
-            <th>Nomor Seri</th>
-            <th>Tahun</th>
-            <th>Grade</th>
-            <th>HPP/pcs</th>
-            <th style="text-align:center;">Tujuan</th>
-            <th style="text-align:center;">Status</th>
-            <th style="text-align:center;">Aksi</th>
+            <th class="col-nama">Nama Item</th>
+            <th class="col-sn">Nomor Seri</th>
+            <th class="col-tight" style="text-align:center;">Tahun</th>
+            <th class="col-tight" style="text-align:center;">Grade</th>
+            <th class="col-tight" style="text-align:center;">Qty</th>
+            <th class="col-tight">HPP/pcs</th>
+            <th class="col-tight" style="text-align:center;">Tujuan</th>
+            <th class="col-tight" style="text-align:center;">Status</th>
+            <th class="col-aksi" style="text-align:center;">Aksi</th>
           </tr>
         </thead>
         <tbody>
@@ -355,9 +356,15 @@ function renderKoleksiTable(data, total, page) {
       ? formatStatusIconOnly(item.status)
       : formatStatus(item.status);
 
+    const totalQty = item.qty || 1;
+    const terjualQty = item.qty_terjual || 0;
+    const qtyBadgeHtml = terjualQty > 0
+      ? `<span title="Tersisa ${qtyTersisa} dari total ${totalQty} pcs (${terjualQty} terjual)" style="font-weight:700; color:${isHabis ? 'var(--danger)' : 'var(--text-primary)'};">${qtyTersisa}<span style="color:var(--text-muted); font-weight:400; font-size:10.5px;">/${totalQty}</span></span>`
+      : `<strong style="color:${isHabis ? 'var(--danger)' : 'var(--text-primary)'};" title="Stok: ${qtyTersisa} pcs">${qtyTersisa}</strong>`;
+
     html += `
       <tr>
-        <td class="item-name-hover">
+        <td class="item-name-hover col-nama">
           <div style="display:flex; align-items:center; gap:6px;">
             <span class="jenis-inline-icon" title="${escapeHtml(JENIS_LABELS[item.jenis] || item.jenis || '')}">${jenisIco}</span>
             <span style="font-weight:600; color:var(--text-primary); cursor:pointer;" onclick="showViewItemModal(${item.id})" title="Klik untuk lihat rincian">${escapeHtml(item.nama_item)}</span>
@@ -366,16 +373,17 @@ function renderKoleksiTable(data, total, page) {
           ${item.group_nama ? `<div style="margin-top:2px;"><span class="badge badge-group" style="font-size:10px; padding:1px 6px; cursor:pointer;" onclick="filterByGroupDirect(${item.group_id})" title="Filter group: ${escapeHtml(item.group_nama)}">🗂️ ${escapeHtml(item.group_nama)}</span></div>` : ''}
           ${photoTooltipHtml}
         </td>
-        <td>
+        <td class="col-sn">
           ${item.nomor_seri ? `<code style="font-weight:600; color:var(--gold-light);">${escapeHtml(item.nomor_seri)}</code>` : '<span style="color:var(--text-muted);">-</span>'}
           ${item.kode_item ? `<div style="font-size:10px; color:var(--text-muted); font-family:monospace; margin-top:2px;">${escapeHtml(item.kode_item)}</div>` : ''}
         </td>
-        <td>${escapeHtml(item.tahun || '-')}</td>
-        <td>${formatGrade(item.grade)}</td>
-        <td style="font-weight:600;">${formatRupiah(item.hpp_per_pcs)}</td>
-        <td style="text-align:center;">${tujuanIconBadge}</td>
-        <td style="text-align:center;">${statusIconBadge}</td>
-        <td>
+        <td class="col-tight" style="text-align:center;">${escapeHtml(item.tahun || '-')}</td>
+        <td class="col-tight" style="text-align:center;">${formatGrade(item.grade)}</td>
+        <td class="col-tight" style="text-align:center;">${qtyBadgeHtml}</td>
+        <td class="col-tight" style="font-weight:600;">${formatRupiah(item.hpp_per_pcs)}</td>
+        <td class="col-tight" style="text-align:center;">${tujuanIconBadge}</td>
+        <td class="col-tight" style="text-align:center;">${statusIconBadge}</td>
+        <td class="col-aksi">
           <div class="td-actions" style="justify-content:center;">
             <button class="btn btn-secondary btn-icon" title="Lihat Rincian &amp; Galeri Foto Lengkap" onclick="showViewItemModal(${item.id})">👁️</button>
             <button class="btn btn-secondary btn-icon" title="Edit Koleksi" onclick="showEditKoleksiModal(${item.id})">✏️</button>
@@ -472,11 +480,45 @@ async function showViewItemModal(id) {
     const isHabis = qtyTersisa <= 0;
     const jenisIco = typeof getJenisIcon === 'function' ? getJenisIcon(item.jenis) : '📄';
 
-    const safeTitleObv = escapeHtml((item.nama_item || 'Koleksi') + ' - Obverse');
-    const safeTitleRev = escapeHtml((item.nama_item || 'Koleksi') + ' - Reverse');
-
     const galleryList = Array.isArray(item.gallery_fotos) ? item.gallery_fotos : [];
     const galleryCount = galleryList.length;
+
+    // Susun urutan siklus foto: OBV -> REV -> Foto Pendukung lainnya -> kembali ke OBV
+    const orderedPhotos = [];
+    if (fotoObv) {
+      orderedPhotos.push({
+        url: fotoObv,
+        tag: '📸 OBV (Tampak Depan)',
+        title: `${item.nama_item || 'Koleksi'} — OBV (Tampak Depan)`,
+        catatan: ''
+      });
+    }
+    if (fotoRev) {
+      orderedPhotos.push({
+        url: fotoRev,
+        tag: '📸 REV (Tampak Belakang)',
+        title: `${item.nama_item || 'Koleksi'} — REV (Tampak Belakang)`,
+        catatan: ''
+      });
+    }
+    galleryList.forEach(gf => {
+      if (gf && gf.foto_path) {
+        const lbl = getGalleryLabelDisplay(gf.label);
+        orderedPhotos.push({
+          url: gf.foto_path,
+          tag: lbl,
+          title: `${item.nama_item || 'Koleksi'} — ${lbl}${gf.catatan ? ' (' + gf.catatan + ')' : ''}`,
+          catatan: gf.catatan || ''
+        });
+      }
+    });
+
+    window._detailPhotoCarouselState = {
+      itemId: item.id,
+      namaItem: item.nama_item || 'Koleksi',
+      photos: orderedPhotos,
+      currentIndex: 0
+    };
 
     const body = `
       <div>
@@ -484,53 +526,9 @@ async function showViewItemModal(id) {
         <div id="detailTabContentInfo" style="display:block;">
           <div style="display:flex; flex-direction:column; gap:16px;">
             
-            <!-- Photos Row (OBV, REV, dan foto tambahan ditaruh di sebelah kanannya) -->
-            <!-- Jika tidak ada foto tambahan selain OBV & REV, area kanan dibiarkan kosong tanpa kotak kosong -->
-            <div style="display:flex; gap:14px; align-items:flex-start; overflow-x:auto; padding-bottom:6px; max-width:100%;">
-              <!-- Obverse Card -->
-              <div style="width:180px; text-align:center; flex-shrink:0;">
-                <div style="width:180px; height:105px; border-radius:10px; background:#0a0c10; border:1px solid var(--border-gold); overflow:hidden; display:flex; align-items:center; justify-content:center; padding:4px; box-shadow: inset 0 0 14px rgba(0,0,0,0.8);">
-                  ${fotoObv ? `
-                    <img src="${escapeHtml(fotoObv)}" style="max-width:100%; max-height:100%; object-fit:contain; cursor:zoom-in; border-radius:4px;" onclick="openGlobalLightbox('${escapeHtml(fotoObv)}', '${safeTitleObv}')" title="Tampak Depan (Klik untuk memperbesar)" onerror="this.onerror=null; this.src='/static/img/logo.png';">
-                  ` : `
-                    <div style="text-align:center; color:var(--text-muted); font-size:11px;">
-                      <div style="font-size:26px; margin-bottom:2px;">🪙</div>
-                      Tanpa OBV
-                    </div>
-                  `}
-                </div>
-                <div style="font-size:11px; color:var(--gold-light); font-weight:700; margin-top:6px;">📸 OBV (Tampak Depan)</div>
-              </div>
-
-              <!-- Reverse Card -->
-              <div style="width:180px; text-align:center; flex-shrink:0;">
-                <div style="width:180px; height:105px; border-radius:10px; background:#0a0c10; border:1px solid var(--border-gold); overflow:hidden; display:flex; align-items:center; justify-content:center; padding:4px; box-shadow: inset 0 0 14px rgba(0,0,0,0.8);">
-                  ${fotoRev ? `
-                    <img src="${escapeHtml(fotoRev)}" style="max-width:100%; max-height:100%; object-fit:contain; cursor:zoom-in; border-radius:4px;" onclick="openGlobalLightbox('${escapeHtml(fotoRev)}', '${safeTitleRev}')" title="Tampak Belakang (Klik untuk memperbesar)" onerror="this.onerror=null; this.src='/static/img/logo.png';">
-                  ` : `
-                    <div style="text-align:center; color:var(--text-muted); font-size:11px;">
-                      <div style="font-size:26px; margin-bottom:2px;">🪙</div>
-                      Tanpa REV
-                    </div>
-                  `}
-                </div>
-                <div style="font-size:11px; color:var(--gold-light); font-weight:700; margin-top:6px;">📸 REV (Tampak Belakang)</div>
-              </div>
-
-              <!-- Foto Selain OBV & REV (Ditaruh berdampingan di baris yang sama) -->
-              ${galleryList.map(gf => {
-                const labelText = getGalleryLabelDisplay(gf.label);
-                return `
-                  <div style="width:180px; text-align:center; flex-shrink:0;">
-                    <div style="width:180px; height:105px; border-radius:10px; background:#0a0c10; border:1px solid var(--border-gold); overflow:hidden; display:flex; align-items:center; justify-content:center; padding:4px; box-shadow: inset 0 0 14px rgba(0,0,0,0.8);">
-                      <img src="${escapeHtml(gf.foto_path)}" style="max-width:100%; max-height:100%; object-fit:contain; cursor:zoom-in; border-radius:4px;" onclick="openGlobalLightbox('${escapeHtml(gf.foto_path)}', '${escapeHtml(item.nama_item + ' - ' + labelText)}')" title="Klik untuk memperbesar (Lightbox)" onerror="this.onerror=null; this.src='/static/img/logo.png';">
-                    </div>
-                    <div style="font-size:11px; color:var(--gold-light); font-weight:700; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(gf.catatan || labelText)}">
-                      ${escapeHtml(labelText)}
-                    </div>
-                  </div>
-                `;
-              }).join('')}
+            <!-- Interactive Photo Carousel (OBV -> REV -> Foto Pendukung -> OBV) -->
+            <div id="detailPhotoCarouselContainer">
+              ${renderDetailPhotoCarouselHtml()}
             </div>
 
             <!-- Metadata Header -->
@@ -707,9 +705,144 @@ async function showViewItemModal(id) {
       footer,
       size: 'lg'
     });
+
+    bindDetailModalKeyNavigation();
   } catch (err) {
     showToast('Gagal memuat detail item: ' + err.message, 'error');
   }
+}
+
+function renderDetailPhotoCarouselHtml() {
+  const st = window._detailPhotoCarouselState;
+  if (!st || !Array.isArray(st.photos) || st.photos.length === 0) {
+    return `
+      <div style="display:flex; gap:14px; align-items:center;">
+        <div style="width:160px; height:95px; border-radius:10px; background:#0a0c10; border:1px dashed var(--border); display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-muted); font-size:11px;">
+          <div style="font-size:24px; margin-bottom:2px;">🪙</div>
+          Belum Ada Foto
+        </div>
+      </div>
+    `;
+  }
+
+  const photos = st.photos;
+  const idx = Math.max(0, Math.min(st.currentIndex, photos.length - 1));
+  const cur = photos[idx];
+  const hasMultiple = photos.length > 1;
+
+  return `
+    <div class="detail-photo-carousel-wrap">
+      <div class="detail-photo-caption-bar">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span style="font-size:12.5px; font-weight:700; color:var(--gold-light);">${escapeHtml(cur.tag)}</span>
+          ${cur.catatan ? `<span style="font-size:11.5px; color:var(--text-secondary);">• ${escapeHtml(cur.catatan)}</span>` : ''}
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="badge" style="background:rgba(212,175,55,0.16); color:var(--gold-light); border:1px solid var(--border-gold); font-size:11px;">
+            Foto ${idx + 1} / ${photos.length}
+          </span>
+          <button type="button" class="photo-mini-btn" onclick="openDetailPhotoLightbox(${idx})" title="Perbesar Foto (Zoom Fullscreen)">
+            🔍 Perbesar
+          </button>
+        </div>
+      </div>
+
+      <div class="detail-photo-stage">
+        ${hasMultiple ? `
+          <button type="button" class="detail-photo-nav-btn prev" onclick="navigateDetailPhoto(-1)" title="Foto Sebelumnya (Panah Kiri ←)">&#10094;</button>
+        ` : ''}
+        <img src="${escapeHtml(cur.url)}" alt="${escapeHtml(cur.title)}" onclick="openDetailPhotoLightbox(${idx})" title="Klik untuk memperbesar (Gunakan tombol ◀ ▶ atau Panah Keyboard Kiri/Kanan untuk menggeser foto)" onerror="this.onerror=null; this.src='/static/img/logo.png';">
+        ${hasMultiple ? `
+          <button type="button" class="detail-photo-nav-btn next" onclick="navigateDetailPhoto(1)" title="Foto Berikutnya (Panah Kanan →)">&#10095;</button>
+        ` : ''}
+      </div>
+
+      ${hasMultiple ? `
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+          <div class="detail-photo-thumb-strip">
+            ${photos.map((p, i) => `
+              <div class="detail-photo-thumb-item ${i === idx ? 'active' : ''}" onclick="selectDetailPhoto(${i})" ondblclick="openDetailPhotoLightbox(${i})" title="${escapeHtml(p.tag)}${p.catatan ? ' - ' + escapeHtml(p.catatan) : ''}">
+                <img src="${escapeHtml(p.url)}" alt="${escapeHtml(p.tag)}" onerror="this.onerror=null; this.src='/static/img/logo.png';">
+                <div class="detail-photo-thumb-label">${escapeHtml(p.tag)}</div>
+              </div>
+            `).join('')}
+          </div>
+          <div style="font-size:10.5px; color:var(--text-muted); white-space:nowrap;">
+            💡 Tekan tombol <strong>◀ / ▶</strong> pada keyboard untuk menggeser foto
+          </div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function navigateDetailPhoto(step) {
+  const st = window._detailPhotoCarouselState;
+  if (!st || !Array.isArray(st.photos) || st.photos.length <= 1) return;
+  st.currentIndex = (st.currentIndex + step + st.photos.length) % st.photos.length;
+  const container = document.getElementById('detailPhotoCarouselContainer');
+  if (container) {
+    container.innerHTML = renderDetailPhotoCarouselHtml();
+  }
+}
+
+function selectDetailPhoto(index) {
+  const st = window._detailPhotoCarouselState;
+  if (!st || !Array.isArray(st.photos) || index < 0 || index >= st.photos.length) return;
+  st.currentIndex = index;
+  const container = document.getElementById('detailPhotoCarouselContainer');
+  if (container) {
+    container.innerHTML = renderDetailPhotoCarouselHtml();
+  }
+}
+
+function openDetailPhotoLightbox(index) {
+  const st = window._detailPhotoCarouselState;
+  if (!st || !Array.isArray(st.photos) || !st.photos.length) return;
+  const idx = (index !== undefined && index >= 0 && index < st.photos.length) ? index : st.currentIndex;
+  const cur = st.photos[idx];
+  openGlobalLightbox(cur.url, cur.title, st.photos, idx);
+}
+
+window._syncDetailPhotoFromLightbox = function(index) {
+  const container = document.getElementById('detailPhotoCarouselContainer');
+  if (container && window._detailPhotoCarouselState) {
+    window._detailPhotoCarouselState.currentIndex = index;
+    container.innerHTML = renderDetailPhotoCarouselHtml();
+  }
+};
+
+function handleDetailModalKeydown(e) {
+  // Jika Lightbox sedang aktif, biarkan handler Lightbox yang menangani
+  const lightbox = document.getElementById('globalImageLightbox');
+  if (lightbox && lightbox.classList.contains('active')) return;
+
+  // Pastikan modal detail sedang terbuka dan tampak di layar
+  const container = document.getElementById('detailPhotoCarouselContainer');
+  const modalOverlay = document.getElementById('modalOverlay');
+  if (!container || !modalOverlay || modalOverlay.classList.contains('hidden')) {
+    window.removeEventListener('keydown', handleDetailModalKeydown);
+    return;
+  }
+
+  // Jangan intersep jika pengguna sedang mengetik di dalam input/textarea
+  const activeEl = document.activeElement;
+  if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
+    return;
+  }
+
+  if (e.key === 'ArrowLeft') {
+    e.preventDefault();
+    navigateDetailPhoto(-1);
+  } else if (e.key === 'ArrowRight') {
+    e.preventDefault();
+    navigateDetailPhoto(1);
+  }
+}
+
+function bindDetailModalKeyNavigation() {
+  window.removeEventListener('keydown', handleDetailModalKeydown);
+  window.addEventListener('keydown', handleDetailModalKeydown);
 }
 
 /**

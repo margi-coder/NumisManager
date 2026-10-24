@@ -483,8 +483,13 @@ function renderEmpty(containerId, title = 'Tidak Ada Data', desc = 'Belum ada da
 /**
  * Global Image Lightbox (Overlay on top of any modal without destroying modal state)
  */
-function openGlobalLightbox(url, title = 'Preview Gambar') {
-  if (!url) return;
+let _lightboxGalleryState = {
+  items: [],
+  currentIndex: 0
+};
+
+function openGlobalLightbox(url, title = 'Preview Gambar', galleryItems = null, startIndex = 0) {
+  if (!url && (!galleryItems || !galleryItems.length)) return;
   let lightbox = document.getElementById('globalImageLightbox');
   if (!lightbox) {
     lightbox = document.createElement('div');
@@ -493,20 +498,96 @@ function openGlobalLightbox(url, title = 'Preview Gambar') {
     document.body.appendChild(lightbox);
   }
 
+  if (Array.isArray(galleryItems) && galleryItems.length > 0) {
+    _lightboxGalleryState.items = galleryItems;
+    _lightboxGalleryState.currentIndex = Math.max(0, Math.min(startIndex, galleryItems.length - 1));
+  } else {
+    _lightboxGalleryState.items = [{ url, title, tag: title }];
+    _lightboxGalleryState.currentIndex = 0;
+  }
+
+  renderGlobalLightboxContent();
+  lightbox.classList.add('active');
+  window.addEventListener('keydown', handleModalEsc);
+  window.addEventListener('keydown', handleLightboxKeyNav);
+}
+
+function renderGlobalLightboxContent() {
+  const lightbox = document.getElementById('globalImageLightbox');
+  if (!lightbox) return;
+  const items = _lightboxGalleryState.items || [];
+  if (!items.length) return;
+  const idx = _lightboxGalleryState.currentIndex;
+  const current = items[idx] || items[0];
+  const hasMultiple = items.length > 1;
+
   lightbox.innerHTML = `
     <div class="lightbox-backdrop" onclick="closeGlobalLightbox()"></div>
     <div class="lightbox-content">
-      <div class="lightbox-header">
-        <div class="lightbox-title">🔍 ${escapeHtml(title)}</div>
+      <div class="lightbox-header" style="gap:12px;">
+        <div class="lightbox-title" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span>🔍 ${escapeHtml(current.title || 'Preview Gambar')}</span>
+          ${hasMultiple ? `<span class="badge" style="background:rgba(212,175,55,0.2); color:var(--gold-light); border:1px solid var(--border-gold); font-size:11px;">Foto ${idx + 1} / ${items.length} (Gunakan tombol ◀ ▶ atau Panah Keyboard)</span>` : ''}
+        </div>
         <button type="button" class="lightbox-close-btn" onclick="closeGlobalLightbox()" title="Tutup Preview (Esc)">&times;</button>
       </div>
-      <div class="lightbox-image-wrap">
-        <img src="${escapeHtml(url)}" alt="${escapeHtml(title)}" class="lightbox-img" onerror="this.onerror=null; this.src='/static/img/logo.png';">
+      <div class="lightbox-image-wrap" style="position:relative; min-width:320px; min-height:260px;">
+        ${hasMultiple ? `
+          <button type="button" class="lightbox-nav-btn prev" onclick="event.stopPropagation(); navigateGlobalLightbox(-1)" title="Foto Sebelumnya (Panah Kiri ←)">&#10094;</button>
+        ` : ''}
+        <img src="${escapeHtml(current.url)}" alt="${escapeHtml(current.title || '')}" class="lightbox-img" onerror="this.onerror=null; this.src='/static/img/logo.png';">
+        ${hasMultiple ? `
+          <button type="button" class="lightbox-nav-btn next" onclick="event.stopPropagation(); navigateGlobalLightbox(1)" title="Foto Berikutnya (Panah Kanan →)">&#10095;</button>
+        ` : ''}
       </div>
+      ${hasMultiple ? `
+        <div style="background:#0d1017; border-top:1px solid var(--border); padding:8px 14px; display:flex; justify-content:center;">
+          <div class="lightbox-thumb-strip">
+            ${items.map((it, i) => `
+              <div class="lightbox-thumb-item ${i === idx ? 'active' : ''}" onclick="event.stopPropagation(); selectGlobalLightboxIndex(${i})" title="${escapeHtml(it.tag || it.title || ('Foto ' + (i + 1)))}">
+                <img src="${escapeHtml(it.url)}" alt="${escapeHtml(it.tag || '')}" onerror="this.onerror=null; this.src='/static/img/logo.png';">
+                <div class="lightbox-thumb-label">${escapeHtml(it.tag || ('Foto ' + (i + 1)))}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
     </div>
   `;
-  lightbox.classList.add('active');
-  window.addEventListener('keydown', handleModalEsc);
+}
+
+function navigateGlobalLightbox(step) {
+  const items = _lightboxGalleryState.items || [];
+  if (items.length <= 1) return;
+  _lightboxGalleryState.currentIndex = (_lightboxGalleryState.currentIndex + step + items.length) % items.length;
+  renderGlobalLightboxContent();
+  if (typeof window._syncDetailPhotoFromLightbox === 'function') {
+    window._syncDetailPhotoFromLightbox(_lightboxGalleryState.currentIndex);
+  }
+}
+
+function selectGlobalLightboxIndex(index) {
+  const items = _lightboxGalleryState.items || [];
+  if (index < 0 || index >= items.length) return;
+  _lightboxGalleryState.currentIndex = index;
+  renderGlobalLightboxContent();
+  if (typeof window._syncDetailPhotoFromLightbox === 'function') {
+    window._syncDetailPhotoFromLightbox(index);
+  }
+}
+
+function handleLightboxKeyNav(e) {
+  const lightbox = document.getElementById('globalImageLightbox');
+  if (!lightbox || !lightbox.classList.contains('active')) return;
+  if (e.key === 'ArrowLeft') {
+    e.preventDefault();
+    e.stopPropagation();
+    navigateGlobalLightbox(-1);
+  } else if (e.key === 'ArrowRight') {
+    e.preventDefault();
+    e.stopPropagation();
+    navigateGlobalLightbox(1);
+  }
 }
 
 function closeGlobalLightbox() {
@@ -515,11 +596,12 @@ function closeGlobalLightbox() {
     lightbox.classList.remove('active');
     lightbox.innerHTML = '';
   }
+  window.removeEventListener('keydown', handleLightboxKeyNav);
 }
 
 // Global fallback alias for viewImageLightbox
-function viewImageLightbox(url, title = 'Preview Item') {
-  openGlobalLightbox(url, title);
+function viewImageLightbox(url, title = 'Preview Item', galleryItems = null, startIndex = 0) {
+  openGlobalLightbox(url, title, galleryItems, startIndex);
 }
 
 /**

@@ -485,10 +485,11 @@ function renderEmpty(containerId, title = 'Tidak Ada Data', desc = 'Belum ada da
  */
 let _lightboxGalleryState = {
   items: [],
-  currentIndex: 0
+  currentIndex: 0,
+  isFullscreen: false
 };
 
-function openGlobalLightbox(url, title = 'Preview Gambar', galleryItems = null, startIndex = 0) {
+function openGlobalLightbox(url, title = 'Preview Gambar', galleryItems = null, startIndex = 0, autoFullscreen = false) {
   if (!url && (!galleryItems || !galleryItems.length)) return;
   let lightbox = document.getElementById('globalImageLightbox');
   if (!lightbox) {
@@ -506,10 +507,17 @@ function openGlobalLightbox(url, title = 'Preview Gambar', galleryItems = null, 
     _lightboxGalleryState.currentIndex = 0;
   }
 
+  _lightboxGalleryState.isFullscreen = Boolean(autoFullscreen);
+  lightbox.classList.toggle('is-fullscreen', _lightboxGalleryState.isFullscreen);
+
   renderGlobalLightboxContent();
   lightbox.classList.add('active');
   window.addEventListener('keydown', handleModalEsc);
   window.addEventListener('keydown', handleLightboxKeyNav);
+
+  if (autoFullscreen && lightbox.requestFullscreen && !document.fullscreenElement) {
+    lightbox.requestFullscreen().catch(() => {});
+  }
 }
 
 function renderGlobalLightboxContent() {
@@ -520,6 +528,7 @@ function renderGlobalLightboxContent() {
   const idx = _lightboxGalleryState.currentIndex;
   const current = items[idx] || items[0];
   const hasMultiple = items.length > 1;
+  const isFs = _lightboxGalleryState.isFullscreen || Boolean(document.fullscreenElement);
 
   lightbox.innerHTML = `
     <div class="lightbox-backdrop" onclick="closeGlobalLightbox()"></div>
@@ -529,19 +538,24 @@ function renderGlobalLightboxContent() {
           <span>🔍 ${escapeHtml(current.title || 'Preview Gambar')}</span>
           ${hasMultiple ? `<span class="badge" style="background:rgba(212,175,55,0.2); color:var(--gold-light); border:1px solid var(--border-gold); font-size:11px;">Foto ${idx + 1} / ${items.length} (Gunakan tombol ◀ ▶ atau Panah Keyboard)</span>` : ''}
         </div>
-        <button type="button" class="lightbox-close-btn" onclick="closeGlobalLightbox()" title="Tutup Preview (Esc)">&times;</button>
+        <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+          <button type="button" class="photo-mini-btn" onclick="event.stopPropagation(); toggleLightboxFullscreen()" title="Tampilan Layar Penuh / Fullscreen (Tombol F)">
+            ${isFs ? '🗗 Keluar Fullscreen' : '⛶ Fullscreen'}
+          </button>
+          <button type="button" class="lightbox-close-btn" onclick="closeGlobalLightbox()" title="Tutup Preview (Esc)">&times;</button>
+        </div>
       </div>
-      <div class="lightbox-image-wrap" style="position:relative; min-width:320px; min-height:260px;">
+      <div class="lightbox-image-wrap">
         ${hasMultiple ? `
           <button type="button" class="lightbox-nav-btn prev" onclick="event.stopPropagation(); navigateGlobalLightbox(-1)" title="Foto Sebelumnya (Panah Kiri ←)">&#10094;</button>
         ` : ''}
-        <img src="${escapeHtml(current.url)}" alt="${escapeHtml(current.title || '')}" class="lightbox-img" onerror="this.onerror=null; this.src='/static/img/logo.png';">
+        <img src="${escapeHtml(current.url)}" alt="${escapeHtml(current.title || '')}" class="lightbox-img" ondblclick="toggleLightboxFullscreen()" title="Klik ganda (Double-click) untuk Fullscreen" onerror="this.onerror=null; this.src='/static/img/logo.png';">
         ${hasMultiple ? `
           <button type="button" class="lightbox-nav-btn next" onclick="event.stopPropagation(); navigateGlobalLightbox(1)" title="Foto Berikutnya (Panah Kanan →)">&#10095;</button>
         ` : ''}
       </div>
       ${hasMultiple ? `
-        <div style="background:#0d1017; border-top:1px solid var(--border); padding:8px 14px; display:flex; justify-content:center;">
+        <div class="lightbox-footer-thumbs">
           <div class="lightbox-thumb-strip">
             ${items.map((it, i) => `
               <div class="lightbox-thumb-item ${i === idx ? 'active' : ''}" onclick="event.stopPropagation(); selectGlobalLightboxIndex(${i})" title="${escapeHtml(it.tag || it.title || ('Foto ' + (i + 1)))}">
@@ -555,6 +569,36 @@ function renderGlobalLightboxContent() {
     </div>
   `;
 }
+
+function toggleLightboxFullscreen() {
+  const lightbox = document.getElementById('globalImageLightbox');
+  if (!lightbox) return;
+  const nextFs = !(_lightboxGalleryState.isFullscreen || Boolean(document.fullscreenElement));
+  _lightboxGalleryState.isFullscreen = nextFs;
+  lightbox.classList.toggle('is-fullscreen', nextFs);
+
+  if (nextFs) {
+    if (lightbox.requestFullscreen && !document.fullscreenElement) {
+      lightbox.requestFullscreen().catch(() => {});
+    }
+  } else {
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    }
+  }
+  renderGlobalLightboxContent();
+}
+
+document.addEventListener('fullscreenchange', () => {
+  const lightbox = document.getElementById('globalImageLightbox');
+  if (!lightbox || !lightbox.classList.contains('active')) return;
+  const isBrowserFs = Boolean(document.fullscreenElement);
+  if (!isBrowserFs && _lightboxGalleryState.isFullscreen) {
+    _lightboxGalleryState.isFullscreen = false;
+    lightbox.classList.remove('is-fullscreen');
+    renderGlobalLightboxContent();
+  }
+});
 
 function navigateGlobalLightbox(step) {
   const items = _lightboxGalleryState.items || [];
@@ -587,21 +631,29 @@ function handleLightboxKeyNav(e) {
     e.preventDefault();
     e.stopPropagation();
     navigateGlobalLightbox(1);
+  } else if (e.key === 'f' || e.key === 'F') {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleLightboxFullscreen();
   }
 }
 
 function closeGlobalLightbox() {
   const lightbox = document.getElementById('globalImageLightbox');
+  if (document.fullscreenElement && document.exitFullscreen) {
+    document.exitFullscreen().catch(() => {});
+  }
+  _lightboxGalleryState.isFullscreen = false;
   if (lightbox) {
-    lightbox.classList.remove('active');
+    lightbox.classList.remove('active', 'is-fullscreen');
     lightbox.innerHTML = '';
   }
   window.removeEventListener('keydown', handleLightboxKeyNav);
 }
 
 // Global fallback alias for viewImageLightbox
-function viewImageLightbox(url, title = 'Preview Item', galleryItems = null, startIndex = 0) {
-  openGlobalLightbox(url, title, galleryItems, startIndex);
+function viewImageLightbox(url, title = 'Preview Item', galleryItems = null, startIndex = 0, autoFullscreen = false) {
+  openGlobalLightbox(url, title, galleryItems, startIndex, autoFullscreen);
 }
 
 /**

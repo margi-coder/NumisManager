@@ -741,8 +741,11 @@ function renderDetailPhotoCarouselHtml() {
           <span class="badge" style="background:rgba(212,175,55,0.16); color:var(--gold-light); border:1px solid var(--border-gold); font-size:11px;">
             Foto ${idx + 1} / ${photos.length}
           </span>
-          <button type="button" class="photo-mini-btn" onclick="openDetailPhotoLightbox(${idx})" title="Perbesar Foto (Zoom Fullscreen)">
+          <button type="button" class="photo-mini-btn" onclick="openDetailPhotoLightbox(${idx}, false)" title="Buka Pratinjau Foto Besar">
             🔍 Perbesar
+          </button>
+          <button type="button" class="photo-mini-btn" onclick="openDetailPhotoLightbox(${idx}, true)" title="Buka Foto dalam Mode Layar Penuh (Fullscreen)" style="border-color:var(--border-gold); color:var(--gold-light);">
+            ⛶ Fullscreen
           </button>
         </div>
       </div>
@@ -796,12 +799,12 @@ function selectDetailPhoto(index) {
   }
 }
 
-function openDetailPhotoLightbox(index) {
+function openDetailPhotoLightbox(index, autoFullscreen = false) {
   const st = window._detailPhotoCarouselState;
   if (!st || !Array.isArray(st.photos) || !st.photos.length) return;
   const idx = (index !== undefined && index >= 0 && index < st.photos.length) ? index : st.currentIndex;
   const cur = st.photos[idx];
-  openGlobalLightbox(cur.url, cur.title, st.photos, idx);
+  openGlobalLightbox(cur.url, cur.title, st.photos, idx, autoFullscreen);
 }
 
 window._syncDetailPhotoFromLightbox = function(index) {

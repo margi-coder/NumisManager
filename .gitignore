@@ -48,14 +48,7 @@ static/uploads/*.jpg
 !static/uploads/item_*
 !static/uploads/batch_*
 
-# Generated Offline Installer Binaries (stored locally in Installer/)
-Installer/*.exe
-Installer/*.run
-Installer/smart_phone/*.apk
-Installer/smart_phone/*.ipa
-Installer/smart_phone/*.mobileconfig
-Installer/smart_phone/*.html
-Installer/smart_phone/*.idsig
+
 
 # Scratch and temporary databases
 dashboard.db

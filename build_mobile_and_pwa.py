@@ -15,780 +15,563 @@ INSTALLER_DIR.mkdir(parents=True, exist_ok=True)
 SMARTPHONE_DIR.mkdir(parents=True, exist_ok=True)
 
 # ==============================================================================
-# 1. CREATE static/js/mobile_offline_engine.js
-#    Provides:
-#    - Full Offline Standalone Database & REST API Engine for Android APK & iOS
-#    - Connection Mode Switcher (Mode Mandiri Offline di HP vs Server PC/Cloud)
+# 2. PREPARE PORTABLE MOBILE WEB ASSETS (FOR ANDROID APK & iOS)
+#    Adjusts absolute '/static/...' and '/app' links to work seamlessly from
+#    file:///android_asset/www/ (Android APK) and iOS WebClip / Local Bundle
 # ==============================================================================
-mobile_engine_js = r"""/**
- * ============================================================================
- * NumisManager - Smartphone Hybrid Offline & Remote Server Engine
- * Mendukung:
- * 1. Mode Mandiri (100% Offline di HP Android / iOS menggunakan Local DB)
- * 2. Mode Server PC / Cloud Tunnel (Terhubung ke http://IP-PC:8000 / https://...)
- * ============================================================================
- */
-(function() {
-  const STORAGE_KEY_DB = 'numis_mobile_standalone_db_v1';
-  const STORAGE_KEY_MODE = 'numis_mobile_conn_mode'; // 'offline' | 'remote'
-  const STORAGE_KEY_SERVER_URL = 'numis_mobile_server_url';
+def prepare_mobile_www_bundle(target_www_dir: Path):
+    if target_www_dir.exists():
+        shutil.rmtree(target_www_dir)
+    target_www_dir.mkdir(parents=True, exist_ok=True)
 
-  const isFileProtocol = window.location.protocol === 'file:' || window.location.protocol === 'content:' || window.location.protocol === 'data:';
-  const isStandaloneDoc = Boolean(window.__NUMIS_STANDALONE_MOBILE__);
+    # Copy static folder (excluding uploaded user photos in static/uploads)
+    shutil.copytree(ROOT_DIR / "static", target_www_dir / "static", dirs_exist_ok=True)
+    uploads_dir = target_www_dir / "static" / "uploads"
+    if uploads_dir.exists():
+        for f in uploads_dir.iterdir():
+            if f.is_file() and f.name != ".gitkeep":
+                try:
+                    f.unlink()
+                except Exception:
+                    pass
 
-  function getConnMode() {
-    const saved = localStorage.getItem(STORAGE_KEY_MODE);
-    if (saved === 'offline' || saved === 'remote') return saved;
-    return (isFileProtocol || isStandaloneDoc) ? 'offline' : 'remote';
-  }
+    # Read and transform login.html -> index.html
+    login_html = (ROOT_DIR / "templates" / "login.html").read_text(encoding="utf-8")
+    login_html = login_html.replace('href="/static/', 'href="static/')
+    login_html = login_html.replace('src="/static/', 'src="static/')
+    login_html = login_html.replace("window.location.href = '/app';", "window.location.href = 'app.html';")
+    login_html = login_html.replace('</head>', '  <script src="static/js/mobile_offline_engine.js"></script>\n</head>')
+    (target_www_dir / "index.html").write_text(login_html, encoding="utf-8")
 
-  function getRemoteServerUrl() {
-    return (localStorage.getItem(STORAGE_KEY_SERVER_URL) || '').replace(/\/+$/, '');
-  }
+    # Read and transform app.html -> app.html
+    app_html = (ROOT_DIR / "templates" / "app.html").read_text(encoding="utf-8")
+    app_html = app_html.replace('href="/static/', 'href="static/')
+    app_html = app_html.replace('src="/static/', 'src="static/')
+    app_html = app_html.replace("window.location.href = '/';", "window.location.href = 'index.html';")
+    app_html = app_html.replace('<!-- Application Scripts -->', '<!-- Application Scripts -->\n  <script src="static/js/mobile_offline_engine.js"></script>')
+    (target_www_dir / "app.html").write_text(app_html, encoding="utf-8")
 
-  function loadLocalDb() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY_DB);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.users) return parsed;
-      }
-    } catch (e) {
-      console.warn('Failed to parse local mobile DB:', e);
-    }
-    const today = new Date().toISOString().split('T')[0];
-    const initial = {
-      nextIds: { user: 2, supplier: 3, group: 3, batch: 2, koleksi: 3, gallery: 1, penjualan: 1, album: 2, page: 2, slot: 10 },
-      users: [
-        { id: 1, username: 'admin', password_plain: 'admin123', nama_lengkap: 'Administrator Mobile', role: 'admin', is_active: 1, created_at: today }
-      ],
-      suppliers: [
-        { id: 1, nama: 'Lelang Numismatik Nusantara', kontak: '08123456789', no_hp: '08123456789', platform: 'Facebook', link_profil: '', alamat: 'Jakarta', catatan: 'Supplier utama', created_at: today },
-        { id: 2, nama: 'Kolektor Uang Kuno Surabaya', kontak: '08987654321', no_hp: '08987654321', platform: 'Tokopedia', link_profil: '', alamat: 'Surabaya', catatan: '', created_at: today }
-      ],
-      groups: [
-        { id: 1, nama_group: 'DAI NIPPON TEIKOKU SEIHU', deskripsi: 'Seri Pendudukan Jepang (1942-1945)', created_at: today },
-        { id: 2, nama_group: 'SERI WAYANG / ORI / BANK INDONESIA', deskripsi: 'Koleksi uang kertas bersejarah Indonesia', created_at: today }
-      ],
-      batches: [
-        { id: 1, kode_batch: 'BTC-20261025-001', nama_batch: 'Lot Perdana Koleksi Mobile', supplier_id: 1, total_ongkir: 15000, perolehan: 'lelang', status: 'terima', is_final_ok: 1, tanggal_beli: today, catatan: 'Contoh batch bawaan mode offline HP', created_at: today }
-      ],
-      koleksi: [
-        {
-          id: 1, kode_item: 'ITM-20261025-001', nama_item: '10 Rupiah Dai Nippon Teikoku 1943', nomor_seri: 'SL 012345',
-          tahun: '1943', denominasi: '10 Rupiah', grade: 'VF+', jenis: 'uang_kertas', negara: 'Indonesia',
-          detail: 'Kondisi kertas utuh dan tebal', catatan_internal: 'Koleksi contoh di HP',
-          foto_obv: '', foto_rev: '', foto_path: '', lembaga_grading: '-', nomor_sertifikasi: '', grade_numerik: '', grading_url: '',
-          supplier_id: 1, batch_id: 1, group_id: 1, perolehan: 'lelang', tanggal_beli: today, status: 'terima',
-          qty: 2, qty_terjual: 0, harga: 120000, ongkir: 15000, hpp: 135000, hpp_per_pcs: 67500, harga_jual: 100000,
-          status_koleksi: 'stock_jual', is_checked: 1, created_at: today
-        },
-        {
-          id: 2, kode_item: 'ITM-20261025-002', nama_item: '500 Rupiah Orangutan 1992 UNC', nomor_seri: 'ABC 888999',
-          tahun: '1992', denominasi: '500 Rupiah', grade: 'UNC', jenis: 'uang_kertas', negara: 'Indonesia',
-          detail: 'Gress lurus tanpa lipatan', catatan_internal: '',
-          foto_obv: '', foto_rev: '', foto_path: '', lembaga_grading: '-', nomor_sertifikasi: '', grade_numerik: '', grading_url: '',
-          supplier_id: 2, batch_id: null, group_id: 2, perolehan: 'beli_langsung', tanggal_beli: today, status: 'terima',
-          qty: 5, qty_terjual: 0, harga: 150000, ongkir: 10000, hpp: 160000, hpp_per_pcs: 32000, harga_jual: 55000,
-          status_koleksi: 'stock_jual', is_checked: 1, created_at: today
-        }
-      ],
-      gallery: [],
-      penjualan: [],
-      albums: [
-        { id: 1, nama_album: 'Album Koleksi Utama', deskripsi: 'Binder Digital Uang Kertas & Koin', kategori: 'campuran', warna_cover: '#8b0000', grid_preset: '3x3', rows_per_page: 3, cols_per_page: 3, created_at: today }
-      ],
-      album_pages: [
-        { id: 1, album_id: 1, nomor_halaman: 1, judul_halaman: 'Halaman 1 - Koleksi Pilihan', rows_override: 3, cols_override: 3 }
-      ],
-      album_slots: []
-    };
-    saveLocalDb(initial);
-    return initial;
-  }
+    # Also patch auth.js and api.js inside target_www_dir/static/js so logout redirects to index.html and default logo works
+    for js_file in (target_www_dir / "static" / "js").glob("*.js"):
+        txt = js_file.read_text(encoding="utf-8")
+        txt = txt.replace("window.location.href = '/';", "window.location.href = (window.location.protocol === 'file:' ? 'index.html' : '/');")
+        txt = txt.replace("window.location.href = '/app';", "window.location.href = (window.location.protocol === 'file:' ? 'app.html' : '/app');")
+        txt = txt.replace("'/static/img/logo.png'", "'static/img/logo.png'")
+        txt = txt.replace('"/static/img/logo.png"', '"static/img/logo.png"')
+        js_file.write_text(txt, encoding="utf-8")
 
-  function saveLocalDb(db) {
-    try {
-      localStorage.setItem(STORAGE_KEY_DB, JSON.stringify(db));
-    } catch (e) {
-      console.error('Failed to save local mobile DB (quota exceeded?):', e);
-    }
-  }
 
-  function nextId(db, key) {
-    if (!db.nextIds) db.nextIds = {};
-    const cur = db.nextIds[key] || 1;
-    db.nextIds[key] = cur + 1;
-    return cur;
-  }
+# ==============================================================================
+# 3. BUILD SIGNED ANDROID APK: Installer/smart_phone/NumisManager-Android-v1.0.0.apk
+# ==============================================================================
+def build_android_apk():
+    # Ensure JAVA_HOME does not end with \bin so d8.bat and apksigner.bat work properly
+    java_home = os.environ.get("JAVA_HOME", r"C:\Program Files\Java\jdk-26.0.1")
+    if java_home.lower().endswith("\\bin") or java_home.lower().endswith("/bin"):
+        java_home = str(Path(java_home).parent)
+    os.environ["JAVA_HOME"] = java_home
 
-  function fileToDataUrl(file) {
-    return new Promise((resolve) => {
-      if (!file || typeof FileReader === 'undefined') return resolve('');
-      const reader = new FileReader();
-      reader.onload = e => resolve(e.target.result || '');
-      reader.onerror = () => resolve('');
-      reader.readAsDataURL(file);
-    });
-  }
+    sdk_dir = Path(os.environ.get("LOCALAPPDATA", "")) / "Android" / "Sdk"
+    build_tools = sdk_dir / "build-tools" / "36.1.0"
+    if not build_tools.exists():
+        # fallback to any available build-tools
+        bt_list = sorted((sdk_dir / "build-tools").glob("*"), reverse=True)
+        build_tools = bt_list[0]
+    platform_jar = sdk_dir / "platforms" / "android-36.1" / "android.jar"
+    if not platform_jar.exists():
+        pf_list = sorted((sdk_dir / "platforms").glob("*/android.jar"), reverse=True)
+        platform_jar = pf_list[0]
 
-  function enrichKoleksiItem(db, it) {
-    const sup = db.suppliers.find(s => Number(s.id) === Number(it.supplier_id));
-    const grp = db.groups.find(g => Number(g.id) === Number(it.group_id));
-    const bat = db.batches.find(b => Number(b.id) === Number(it.batch_id));
-    const gals = (db.gallery || []).filter(gf => Number(gf.koleksi_id) === Number(it.id));
-    const qty = Math.max(1, Number(it.qty || 1));
-    const terjual = Number(it.qty_terjual || 0);
-    return {
-      ...it,
-      qty_tersisa: Math.max(0, qty - terjual),
-      supplier_nama: sup ? sup.nama : null,
-      group_nama: grp ? grp.nama_group : null,
-      batch_kode: bat ? bat.kode_batch : null,
-      batch_nama: bat ? bat.nama_batch : null,
-      gallery_fotos: gals
-    };
-  }
+    aapt2 = build_tools / "aapt2.exe"
+    d8_bat = build_tools / "d8.bat"
+    zipalign = build_tools / "zipalign.exe"
+    apksigner_bat = build_tools / "apksigner.bat"
 
-  function recalculateBatchInDb(db, batchId) {
-    const b = db.batches.find(x => Number(x.id) === Number(batchId));
-    if (!b) return;
-    const items = db.koleksi.filter(k => Number(k.batch_id) === Number(batchId));
-    const totalBeli = items.reduce((s, i) => s + Number(i.harga || 0), 0);
-    const totalOngkir = Number(b.total_ongkir || 0);
-    items.forEach(i => {
-      const qty = Math.max(1, Number(i.qty || 1));
-      const harga = Number(i.harga || 0);
-      const porsi = totalBeli > 0 ? Math.round((harga / totalBeli) * totalOngkir) : Math.round(totalOngkir / Math.max(1, items.length));
-      i.ongkir = porsi;
-      i.hpp = harga + porsi;
-      i.hpp_per_pcs = Math.round(i.hpp / qty);
-    });
-  }
+    tmp_dir = ROOT_DIR / "_tmp_apk_build"
+    if tmp_dir.exists():
+        shutil.rmtree(tmp_dir)
+    tmp_dir.mkdir(parents=True, exist_ok=True)
 
-  function makeJsonResponse(data, status = 200) {
-    return new Response(JSON.stringify(data), {
-      status,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
+    try:
+        # 1. AndroidManifest.xml
+        manifest_xml = """<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="id.numismanager.app"
+    android:versionCode="1"
+    android:versionName="1.0.0">
 
-  function makeHtmlResponse(html, status = 200) {
-    return new Response(html, {
-      status,
-      headers: { 'Content-Type': 'text/html; charset=utf-8' }
-    });
-  }
+    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="35" />
 
-  async function handleLocalApiRequest(urlStr, options = {}) {
-    const db = loadLocalDb();
-    const u = new URL(urlStr, 'http://localhost');
-    const path = u.pathname.replace(/\/+$/, '');
-    const method = (options.method || 'GET').toUpperCase();
-    let bodyObj = {};
-    if (options.body && typeof options.body === 'string') {
-      try { bodyObj = JSON.parse(options.body); } catch (e) {}
-    }
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 
-    // 1. AUTH
-    if (path === '/api/auth/login' && method === 'POST') {
-      const user = db.users.find(x => x.username === bodyObj.username && (x.password_plain === bodyObj.password || bodyObj.password === 'admin123'));
-      if (!user) return makeJsonResponse({ detail: 'Username atau password salah (Default: admin / admin123)' }, 401);
-      return makeJsonResponse({
-        access_token: 'mobile-offline-token-' + user.id,
-        token_type: 'bearer',
-        user: { id: user.id, username: user.username, nama_lengkap: user.nama_lengkap, role: user.role }
-      });
-    }
-    if (path === '/api/auth/me') {
-      const u0 = db.users[0] || { id: 1, username: 'admin', nama_lengkap: 'Administrator Mobile', role: 'admin' };
-      return makeJsonResponse(u0);
-    }
-    if (path === '/api/auth/change-password' && (method === 'PUT' || method === 'POST')) {
-      if (db.users[0] && bodyObj.new_password) {
-        db.users[0].password_plain = bodyObj.new_password;
-        saveLocalDb(db);
-      }
-      return makeJsonResponse({ message: 'Kata sandi berhasil diperbarui' });
-    }
-    if (path === '/api/auth/users') {
-      if (method === 'GET') return makeJsonResponse(db.users);
-      if (method === 'POST') {
-        const nu = {
-          id: nextId(db, 'user'),
-          username: bodyObj.username,
-          password_plain: bodyObj.password || '123456',
-          nama_lengkap: bodyObj.nama_lengkap || bodyObj.username,
-          role: bodyObj.role || 'user',
-          is_active: 1,
-          created_at: new Date().toISOString().split('T')[0]
-        };
-        db.users.push(nu);
-        saveLocalDb(db);
-        return makeJsonResponse(nu);
-      }
-    }
+    <application
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true"
+        android:hardwareAccelerated="true"
+        android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
-    // 2. SUPPLIER
-    if (path === '/api/supplier') {
-      if (method === 'GET') return makeJsonResponse(db.suppliers);
-      if (method === 'POST') {
-        const s = { id: nextId(db, 'supplier'), ...bodyObj, created_at: new Date().toISOString().split('T')[0] };
-        db.suppliers.unshift(s);
-        saveLocalDb(db);
-        return makeJsonResponse(s);
-      }
-    }
-    const mSup = path.match(/^\/api\/supplier\/(\d+)$/);
-    if (mSup) {
-      const sid = Number(mSup[1]);
-      if (method === 'PUT') {
-        const idx = db.suppliers.findIndex(x => Number(x.id) === sid);
-        if (idx >= 0) db.suppliers[idx] = { ...db.suppliers[idx], ...bodyObj };
-        saveLocalDb(db);
-        return makeJsonResponse(db.suppliers[idx] || {});
-      }
-      if (method === 'DELETE') {
-        db.suppliers = db.suppliers.filter(x => Number(x.id) !== sid);
-        saveLocalDb(db);
-        return makeJsonResponse({ message: 'Supplier dihapus' });
-      }
-    }
-
-    // 3. GROUP ITEM
-    if (path === '/api/group-item') {
-      if (method === 'GET') {
-        return makeJsonResponse(db.groups.map(g => ({
-          ...g,
-          jumlah_item: db.koleksi.filter(k => Number(k.group_id) === Number(g.id)).length
-        })));
-      }
-      if (method === 'POST') {
-        const g = { id: nextId(db, 'group'), nama_group: bodyObj.nama_group, deskripsi: bodyObj.deskripsi || '', created_at: new Date().toISOString().split('T')[0] };
-        db.groups.unshift(g);
-        saveLocalDb(db);
-        return makeJsonResponse(g);
-      }
-    }
-    const mGrp = path.match(/^\/api\/group-item\/(\d+)$/);
-    if (mGrp) {
-      const gid = Number(mGrp[1]);
-      if (method === 'PUT') {
-        const idx = db.groups.findIndex(x => Number(x.id) === gid);
-        if (idx >= 0) db.groups[idx] = { ...db.groups[idx], ...bodyObj };
-        saveLocalDb(db);
-        return makeJsonResponse(db.groups[idx] || {});
-      }
-      if (method === 'DELETE') {
-        db.groups = db.groups.filter(x => Number(x.id) !== gid);
-        saveLocalDb(db);
-        return makeJsonResponse({ message: 'Group dihapus' });
-      }
-    }
-
-    // 4. KOLEKSI
-    if (path === '/api/koleksi' && method === 'GET') {
-      let list = db.koleksi.map(it => enrichKoleksiItem(db, it));
-      const q = (u.searchParams.get('search') || '').trim().toLowerCase();
-      const jenis = u.searchParams.get('jenis') || '';
-      const grade = u.searchParams.get('grade') || '';
-      const sk = u.searchParams.get('status_koleksi') || '';
-      const st = u.searchParams.get('status') || '';
-      const gid = u.searchParams.get('group_id') || '';
-      const bid = u.searchParams.get('batch_id') || '';
-
-      if (q) list = list.filter(i => [i.nama_item, i.nomor_seri, i.kode_item, i.tahun, i.detail].join(' ').toLowerCase().includes(q));
-      if (jenis) list = list.filter(i => i.jenis === jenis);
-      if (grade) list = list.filter(i => i.grade === grade);
-      if (sk) list = list.filter(i => i.status_koleksi === sk);
-      if (st) list = list.filter(i => i.status === st);
-      if (gid) list = list.filter(i => String(i.group_id) === String(gid));
-      if (bid) list = list.filter(i => String(i.batch_id) === String(bid));
-
-      list.sort((a, b) => Number(b.id) - Number(a.id));
-      return makeJsonResponse({ items: list, data: list, total: list.length, page: 1, limit: 100, total_pages: 1 });
-    }
-
-    if (path === '/api/koleksi' && method === 'POST') {
-      const id = nextId(db, 'koleksi');
-      const todayStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
-      const qty = Math.max(1, Number(bodyObj.qty || 1));
-      const harga = Number(bodyObj.harga ?? bodyObj.harga_beli ?? 0);
-      const ongkir = Number(bodyObj.ongkir ?? bodyObj.ongkir_alokasi ?? 0);
-      const hpp = harga + ongkir;
-      const item = {
-        id,
-        kode_item: bodyObj.kode_item || `ITM-${todayStr}-${String(id).padStart(3, '0')}`,
-        nama_item: bodyObj.nama_item || 'Item Baru',
-        nomor_seri: bodyObj.nomor_seri || '',
-        tahun: bodyObj.tahun || '',
-        denominasi: bodyObj.denominasi || bodyObj.nominal || '',
-        grade: bodyObj.grade || 'VF',
-        jenis: bodyObj.jenis || 'uang_kertas',
-        negara: bodyObj.negara || 'Indonesia',
-        detail: bodyObj.detail || bodyObj.sertifikasi || '',
-        catatan_internal: bodyObj.catatan_internal || bodyObj.catatan || '',
-        foto_obv: '',
-        foto_rev: '',
-        foto_path: '',
-        lembaga_grading: bodyObj.lembaga_grading || '-',
-        nomor_sertifikasi: bodyObj.nomor_sertifikasi || '',
-        grade_numerik: bodyObj.grade_numerik || '',
-        grading_url: bodyObj.grading_url || '',
-        supplier_id: bodyObj.supplier_id || null,
-        batch_id: bodyObj.batch_id || null,
-        group_id: bodyObj.group_id || null,
-        perolehan: bodyObj.perolehan || 'beli_langsung',
-        tanggal_beli: bodyObj.tanggal_beli || new Date().toISOString().split('T')[0],
-        status: bodyObj.status || 'terima',
-        qty,
-        qty_terjual: 0,
-        harga,
-        ongkir,
-        hpp,
-        hpp_per_pcs: Math.round(hpp / qty),
-        harga_jual: Number(bodyObj.harga_jual || 0),
-        status_koleksi: bodyObj.status_koleksi || 'stock_jual',
-        is_checked: 0,
-        created_at: new Date().toISOString().split('T')[0]
-      };
-      db.koleksi.unshift(item);
-      if (item.batch_id) recalculateBatchInDb(db, item.batch_id);
-      saveLocalDb(db);
-      return makeJsonResponse(enrichKoleksiItem(db, item));
-    }
-
-    const mKolFoto = path.match(/^\/api\/koleksi\/(\d+)\/foto$/);
-    if (mKolFoto && method === 'POST') {
-      const kid = Number(mKolFoto[1]);
-      const tipe = (u.searchParams.get('tipe') || 'obv').toLowerCase();
-      const item = db.koleksi.find(x => Number(x.id) === kid);
-      if (item && options.body instanceof FormData) {
-        const f = options.body.get('foto') || options.body.get('file');
-        const dataUrl = await fileToDataUrl(f);
-        if (dataUrl) {
-          if (tipe === 'rev') item.foto_rev = dataUrl;
-          else { item.foto_obv = dataUrl; item.foto_path = dataUrl; }
-          saveLocalDb(db);
-        }
-      }
-      return makeJsonResponse(item ? enrichKoleksiItem(db, item) : {});
-    }
-
-    const mKolGal = path.match(/^\/api\/koleksi\/(\d+)\/gallery$/);
-    if (mKolGal) {
-      const kid = Number(mKolGal[1]);
-      if (method === 'GET') {
-        return makeJsonResponse((db.gallery || []).filter(g => Number(g.koleksi_id) === kid));
-      }
-      if (method === 'POST' && options.body instanceof FormData) {
-        const f = options.body.get('foto') || options.body.get('file');
-        const label = options.body.get('label') || 'detail';
-        const catatan = options.body.get('catatan') || '';
-        const dataUrl = await fileToDataUrl(f);
-        const gf = { id: nextId(db, 'gallery'), koleksi_id: kid, foto_path: dataUrl, label, catatan, created_at: new Date().toISOString() };
-        if (!db.gallery) db.gallery = [];
-        db.gallery.push(gf);
-        saveLocalDb(db);
-        return makeJsonResponse(gf);
-      }
-    }
-
-    const mKolGalDel = path.match(/^\/api\/koleksi\/(\d+)\/gallery\/(\d+)$/);
-    if (mKolGalDel && method === 'DELETE') {
-      const gid = Number(mKolGalDel[2]);
-      db.gallery = (db.gallery || []).filter(g => Number(g.id) !== gid);
-      saveLocalDb(db);
-      return makeJsonResponse({ message: 'Foto galeri dihapus' });
-    }
-
-    const mKolId = path.match(/^\/api\/koleksi\/(\d+)$/);
-    if (mKolId) {
-      const kid = Number(mKolId[1]);
-      const idx = db.koleksi.findIndex(x => Number(x.id) === kid);
-      if (method === 'GET') {
-        if (idx < 0) return makeJsonResponse({ detail: 'Item tidak ditemukan' }, 404);
-        return makeJsonResponse(enrichKoleksiItem(db, db.koleksi[idx]));
-      }
-      if (method === 'PUT') {
-        if (idx >= 0) {
-          const cur = { ...db.koleksi[idx], ...bodyObj };
-          const qty = Math.max(1, Number(cur.qty || 1));
-          const harga = Number(cur.harga ?? cur.harga_beli ?? 0);
-          const ongkir = Number(cur.ongkir ?? cur.ongkir_alokasi ?? 0);
-          cur.harga = harga;
-          cur.ongkir = ongkir;
-          cur.hpp = harga + ongkir;
-          cur.hpp_per_pcs = Math.round(cur.hpp / qty);
-          db.koleksi[idx] = cur;
-          if (cur.batch_id) recalculateBatchInDb(db, cur.batch_id);
-          saveLocalDb(db);
-          return makeJsonResponse(enrichKoleksiItem(db, cur));
-        }
-      }
-      if (method === 'DELETE') {
-        const bId = idx >= 0 ? db.koleksi[idx].batch_id : null;
-        db.koleksi = db.koleksi.filter(x => Number(x.id) !== kid);
-        if (bId) recalculateBatchInDb(db, bId);
-        saveLocalDb(db);
-        return makeJsonResponse({ message: 'Item dihapus' });
-      }
-    }
-
-    // 5. BATCH PEMBELIAN
-    if (path === '/api/batch' && method === 'GET') {
-      const list = db.batches.map(b => {
-        const bItems = db.koleksi.filter(k => Number(k.batch_id) === Number(b.id));
-        const sup = db.suppliers.find(s => Number(s.id) === Number(b.supplier_id));
-        return {
-          ...b,
-          supplier_nama: sup ? sup.nama : null,
-          item_count: bItems.length,
-          checked_item_count: bItems.filter(i => Number(i.is_checked) === 1).length,
-          items: bItems.map(i => enrichKoleksiItem(db, i))
-        };
-      });
-      return makeJsonResponse({ items: list, data: list, total: list.length });
-    }
-    if (path === '/api/batch' && method === 'POST') {
-      const id = nextId(db, 'batch');
-      const todayStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
-      const b = {
-        id,
-        kode_batch: `BTC-${todayStr}-${String(id).padStart(3, '0')}`,
-        nama_batch: bodyObj.nama_batch || bodyObj.nama || `Batch #${id}`,
-        supplier_id: bodyObj.supplier_id || null,
-        total_ongkir: Number(bodyObj.total_ongkir || 0),
-        perolehan: bodyObj.perolehan || 'lelang',
-        status: bodyObj.status || 'pesan',
-        is_final_ok: 0,
-        tanggal_beli: bodyObj.tanggal_beli || new Date().toISOString().split('T')[0],
-        catatan: bodyObj.catatan || '',
-        created_at: new Date().toISOString().split('T')[0]
-      };
-      db.batches.unshift(b);
-      saveLocalDb(db);
-      return makeJsonResponse(b);
-    }
-
-    const mBatchCheckAll = path.match(/^\/api\/batch\/(\d+)\/items\/check-all$/);
-    if (mBatchCheckAll) {
-      const bid = Number(mBatchCheckAll[1]);
-      const val = bodyObj.is_checked ? 1 : 0;
-      db.koleksi.forEach(k => { if (Number(k.batch_id) === bid) k.is_checked = val; });
-      saveLocalDb(db);
-      return makeJsonResponse({ message: 'Checklist diperbarui' });
-    }
-
-    const mBatchCheckOne = path.match(/^\/api\/batch\/(\d+)\/items\/(\d+)\/check$/);
-    if (mBatchCheckOne) {
-      const iid = Number(mBatchCheckOne[2]);
-      const item = db.koleksi.find(k => Number(k.id) === iid);
-      if (item) item.is_checked = bodyObj.is_checked ? 1 : 0;
-      saveLocalDb(db);
-      return makeJsonResponse({ message: 'Item dicek' });
-    }
-
-    const mBatchFinalOk = path.match(/^\/api\/batch\/(\d+)\/final-ok$/);
-    if (mBatchFinalOk) {
-      const bid = Number(mBatchFinalOk[1]);
-      const b = db.batches.find(x => Number(x.id) === bid);
-      if (b) b.is_final_ok = bodyObj.is_final_ok ? 1 : 0;
-      saveLocalDb(db);
-      return makeJsonResponse(b || {});
-    }
-
-    const mBatchRecalc = path.match(/^\/api\/batch\/(\d+)\/recalculate$/);
-    if (mBatchRecalc) {
-      const bid = Number(mBatchRecalc[1]);
-      recalculateBatchInDb(db, bid);
-      saveLocalDb(db);
-      return makeJsonResponse({ message: 'HPP Batch dihitung ulang' });
-    }
-
-    const mBatchId = path.match(/^\/api\/batch\/(\d+)$/);
-    if (mBatchId) {
-      const bid = Number(mBatchId[1]);
-      const idx = db.batches.findIndex(x => Number(x.id) === bid);
-      if (method === 'GET') {
-        if (idx < 0) return makeJsonResponse({ detail: 'Batch tidak ditemukan' }, 404);
-        const b = db.batches[idx];
-        const sup = db.suppliers.find(s => Number(s.id) === Number(b.supplier_id));
-        const bItems = db.koleksi.filter(k => Number(k.batch_id) === bid).map(i => enrichKoleksiItem(db, i));
-        return makeJsonResponse({
-          ...b,
-          supplier_nama: sup ? sup.nama : null,
-          item_count: bItems.length,
-          checked_item_count: bItems.filter(i => Number(i.is_checked) === 1).length,
-          items: bItems
-        });
-      }
-      if (method === 'PUT') {
-        if (idx >= 0) {
-          db.batches[idx] = { ...db.batches[idx], ...bodyObj };
-          recalculateBatchInDb(db, bid);
-          saveLocalDb(db);
-          return makeJsonResponse(db.batches[idx]);
-        }
-      }
-      if (method === 'DELETE') {
-        db.batches = db.batches.filter(x => Number(x.id) !== bid);
-        db.koleksi = db.koleksi.filter(k => Number(k.batch_id) !== bid);
-        saveLocalDb(db);
-        return makeJsonResponse({ message: 'Batch berhasil dihapus' });
-      }
-    }
-
-    // 6. PENJUALAN
-    if (path === '/api/penjualan') {
-      if (method === 'GET') {
-        const list = (db.penjualan || []).map(p => {
-          const kol = db.koleksi.find(k => Number(k.id) === Number(p.koleksi_id));
-          return { ...p, nama_item: p.nama_item || kol?.nama_item || 'Item', grade: p.grade || kol?.grade || '-' };
-        });
-        return makeJsonResponse({ items: list, data: list, total: list.length, page: 1, limit: 20 });
-      }
-      if (method === 'POST') {
-        const kol = db.koleksi.find(k => Number(k.id) === Number(bodyObj.koleksi_id));
-        if (!kol) return makeJsonResponse({ detail: 'Item koleksi tidak ditemukan' }, 404);
-        const qtyJual = Math.max(1, Number(bodyObj.qty_jual || 1));
-        const hargaJual = Number(bodyObj.harga_jual_pcs || 0);
-        const hppPcs = Number(kol.hpp_per_pcs || 0);
-        kol.qty_terjual = Number(kol.qty_terjual || 0) + qtyJual;
-        const sale = {
-          id: nextId(db, 'penjualan'),
-          kode_jual: `INV-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${String(db.penjualan.length + 1).padStart(3, '0')}`,
-          koleksi_id: kol.id,
-          nama_item: kol.nama_item,
-          grade: kol.grade,
-          qty_jual: qtyJual,
-          harga_jual_pcs: hargaJual,
-          hpp_pcs: hppPcs,
-          total_jual: qtyJual * hargaJual,
-          total_profit: (qtyJual * hargaJual) - (qtyJual * hppPcs),
-          pembeli: bodyObj.pembeli || '-',
-          platform_jual: bodyObj.platform_jual || 'direct',
-          tanggal_jual: bodyObj.tanggal_jual || new Date().toISOString().split('T')[0],
-          catatan: bodyObj.catatan || '',
-          created_at: new Date().toISOString()
-        };
-        db.penjualan.unshift(sale);
-        saveLocalDb(db);
-        return makeJsonResponse(sale);
-      }
-    }
-    const mSaleId = path.match(/^\/api\/penjualan\/(\d+)$/);
-    if (mSaleId) {
-      const sid = Number(mSaleId[1]);
-      if (method === 'DELETE') {
-        const s = db.penjualan.find(x => Number(x.id) === sid);
-        if (s) {
-          const kol = db.koleksi.find(k => Number(k.id) === Number(s.koleksi_id));
-          if (kol) kol.qty_terjual = Math.max(0, Number(kol.qty_terjual || 0) - Number(s.qty_jual || 0));
-        }
-        db.penjualan = db.penjualan.filter(x => Number(x.id) !== sid);
-        saveLocalDb(db);
-        return makeJsonResponse({ message: 'Penjualan dihapus & stok dikembalikan' });
-      }
-    }
-
-    // 7. LAPORAN & DASHBOARD
-    if (path.startsWith('/api/laporan')) {
-      const items = db.koleksi.map(i => enrichKoleksiItem(db, i));
-      const sales = db.penjualan || [];
-      const totalItemJenis = items.length;
-      const totalPcsTersedia = items.reduce((s, i) => s + Number(i.qty_tersisa || 0), 0);
-      const totalNilaiAset = items.reduce((s, i) => s + (Number(i.qty_tersisa || 0) * Number(i.hpp_per_pcs || 0)), 0);
-      const totalOmzet = sales.reduce((s, p) => s + Number(p.total_jual || 0), 0);
-      const totalProfit = sales.reduce((s, p) => s + Number(p.total_profit || 0), 0);
-      const totalTerjualPcs = sales.reduce((s, p) => s + Number(p.qty_jual || 0), 0);
-
-      const byJenis = {};
-      const byGrade = {};
-      items.forEach(i => {
-        byJenis[i.jenis || 'lainnya'] = (byJenis[i.jenis || 'lainnya'] || 0) + Number(i.qty_tersisa || 0);
-        byGrade[i.grade || '-'] = (byGrade[i.grade || '-'] || 0) + Number(i.qty_tersisa || 0);
-      });
-
-      return makeJsonResponse({
-        total_koleksi: totalItemJenis,
-        total_item: totalItemJenis,
-        total_pcs_tersedia: totalPcsTersedia,
-        total_stok_pcs: totalPcsTersedia,
-        total_nilai_aset: totalNilaiAset,
-        total_modal_stok: totalNilaiAset,
-        total_omzet: totalOmzet,
-        total_penjualan: totalOmzet,
-        total_profit: totalProfit,
-        total_laba: totalProfit,
-        total_terjual_pcs: totalTerjualPcs,
-        total_transaksi_jual: sales.length,
-        distribusi_jenis: Object.entries(byJenis).map(([jenis, jumlah]) => ({ jenis, count: jumlah, total_pcs: jumlah })),
-        distribusi_grade: Object.entries(byGrade).map(([grade, jumlah]) => ({ grade, count: jumlah, total_pcs: jumlah })),
-        recent_koleksi: items.slice(0, 6),
-        recent_penjualan: sales.slice(0, 6),
-        items,
-        data: items
-      });
-    }
-
-    // 8. ALBUM DIGITAL
-    if (path === '/api/album') {
-      if (method === 'GET') {
-        return makeJsonResponse((db.albums || []).map(a => ({
-          ...a,
-          page_count: (db.album_pages || []).filter(p => Number(p.album_id) === Number(a.id)).length,
-          filled_slots: (db.album_slots || []).filter(s => Number(s.album_id) === Number(a.id) && s.koleksi_id).length
-        })));
-      }
-      if (method === 'POST') {
-        const aid = nextId(db, 'album');
-        const alb = {
-          id: aid,
-          nama_album: bodyObj.nama_album || 'Album Baru',
-          deskripsi: bodyObj.deskripsi || '',
-          kategori: bodyObj.kategori || 'campuran',
-          warna_cover: bodyObj.warna_cover || '#8b0000',
-          grid_preset: bodyObj.grid_preset || '3x3',
-          rows_per_page: Number(bodyObj.rows_per_page || 3),
-          cols_per_page: Number(bodyObj.cols_per_page || 3),
-          created_at: new Date().toISOString().split('T')[0]
-        };
-        db.albums.push(alb);
-        db.album_pages.push({ id: nextId(db, 'page'), album_id: aid, nomor_halaman: 1, judul_halaman: 'Halaman 1', rows_override: alb.rows_per_page, cols_override: alb.cols_per_page });
-        saveLocalDb(db);
-        return makeJsonResponse(alb);
-      }
-    }
-    const mAlbId = path.match(/^\/api\/album\/(\d+)$/);
-    if (mAlbId && method === 'GET') {
-      const aid = Number(mAlbId[1]);
-      const alb = (db.albums || []).find(a => Number(a.id) === aid);
-      const pages = (db.album_pages || []).filter(p => Number(p.album_id) === aid).map(p => ({
-        ...p,
-        slots: []
-      }));
-      return makeJsonResponse({ ...alb, pages });
-    }
-
-    // 9. BACKUP
-    if (path.startsWith('/api/backup')) {
-      return makeJsonResponse({ backups: [], data: [], message: 'Data tersimpan otomatis pada penyimpanan internal perangkat HP.' });
-    }
-
-    return makeJsonResponse({ status: 'ok' });
-  }
-
-  // Intercept window.fetch for Hybrid Offline / Remote Server routing
-  const originalFetch = window.fetch.bind(window);
-  window.fetch = async function(input, init = {}) {
-    const urlStr = typeof input === 'string' ? input : (input.url || '');
-    const mode = getConnMode();
-    const remoteUrl = getRemoteServerUrl();
-
-    if (urlStr.startsWith('/api/') || urlStr.includes('/api/')) {
-      const apiPathIdx = urlStr.indexOf('/api/');
-      const cleanApiPath = urlStr.substring(apiPathIdx);
-
-      // Jika mode 'remote' dan ada URL server PC, arahkan ke Server PC
-      if (mode === 'remote' && remoteUrl) {
-        return originalFetch(remoteUrl + cleanApiPath, init);
-      }
-      // Jika sedang dibuka dari protokol file:// atau mode 'offline'
-      if (mode === 'offline' || isFileProtocol || isStandaloneDoc) {
-        return handleLocalApiRequest(cleanApiPath, init);
-      }
-      // Jika dibuka dari web browser biasa, coba server asli dulu; jika offline fallback ke Local DB
-      try {
-        return await originalFetch(input, init);
-      } catch (err) {
-        return handleLocalApiRequest(cleanApiPath, init);
-      }
-    }
-    return originalFetch(input, init);
-  };
-
-  // Override window.location.href redirect between '/' and '/app' when running inside APK / Standalone File
-  window.__numisNavigateApp = function(target) {
-    if (isStandaloneDoc && typeof window.__switchStandaloneView === 'function') {
-      window.__switchStandaloneView(target);
-      return;
-    }
-    if (isFileProtocol) {
-      const base = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
-      window.location.href = base + (target === '/app' ? 'app.html' : 'index.html');
-      return;
-    }
-    window.location.href = target;
-  };
-
-  // Render floating mobile connection switcher pill on login/app pages when on mobile/APK
-  window.showMobileConnectionModal = function() {
-    const curMode = getConnMode();
-    const curServer = getRemoteServerUrl() || 'http://192.168.1.10:8000';
-    const existing = document.getElementById('numisMobileConnModal');
-    if (existing) existing.remove();
-
-    const modal = document.createElement('div');
-    modal.id = 'numisMobileConnModal';
-    modal.style.cssText = 'position:fixed;inset:0;z-index:20000;background:rgba(4,6,10,0.85);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:18px;font-family:Inter,sans-serif;';
-    modal.innerHTML = `
-      <div style="background:#161a24;border:1px solid rgba(212,175,55,0.45);border-radius:14px;max-width:420px;width:100%;padding:22px;color:#f0ede6;box-shadow:0 20px 50px rgba(0,0,0,0.8);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-          <strong style="color:#f0c840;font-size:15px;">📱 Pengaturan Mode Aplikasi Smartphone</strong>
-          <button type="button" onclick="document.getElementById('numisMobileConnModal').remove()" style="background:none;border:none;color:#9a9590;font-size:20px;cursor:pointer;">&times;</button>
-        </div>
-        <div style="font-size:12.5px;color:#9a9590;margin-bottom:14px;line-height:1.45;">
-          Pilih apakah aplikasi di HP ini berjalan secara <strong>Mandiri (100% Offline di HP)</strong> atau terhubung ke <strong>Server PC / Cloud Tunnel</strong>:
-        </div>
-        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;border:1px solid ${curMode === 'offline' ? '#d4af37' : '#2a2f42'};background:rgba(212,175,55,${curMode === 'offline' ? '0.1' : '0.02'});margin-bottom:10px;cursor:pointer;">
-          <input type="radio" name="nmConnMode" value="offline" ${curMode === 'offline' ? 'checked' : ''} style="margin-top:3px;accent-color:#d4af37;">
-          <div>
-            <div style="font-weight:700;font-size:13px;color:#f0ede6;">📱 Mode Mandiri (100% Offline di HP)</div>
-            <div style="font-size:11.5px;color:#9a9590;margin-top:2px;">Data koleksi & foto disimpan langsung di memori internal HP tanpa perlu server PC atau internet. (Login: <code>admin</code> / <code>admin123</code>)</div>
-          </div>
-        </label>
-        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;border:1px solid ${curMode === 'remote' ? '#d4af37' : '#2a2f42'};background:rgba(212,175,55,${curMode === 'remote' ? '0.1' : '0.02'});margin-bottom:10px;cursor:pointer;">
-          <input type="radio" name="nmConnMode" value="remote" ${curMode === 'remote' ? 'checked' : ''} style="margin-top:3px;accent-color:#d4af37;">
-          <div style="width:100%;">
-            <div style="font-weight:700;font-size:13px;color:#f0ede6;">🖥️ Terhubung ke Server PC / Cloud Tunnel</div>
-            <div style="font-size:11.5px;color:#9a9590;margin-top:2px;margin-bottom:8px;">Sinkron langsung dengan database NumisManager di PC melalui Wi-Fi LAN atau tautan Cloudflare Tunnel:</div>
-            <input type="text" id="nmServerUrlInput" value="${curServer}" placeholder="http://192.168.1.10:8000" style="width:100%;height:36px;background:#0c0f16;border:1px solid #2a2f42;border-radius:6px;padding:0 10px;color:#f0ede6;font-size:12.5px;">
-          </div>
-        </label>
-        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">
-          <button type="button" onclick="document.getElementById('numisMobileConnModal').remove()" style="padding:8px 14px;border-radius:7px;border:1px solid #2a2f42;background:transparent;color:#f0ede6;font-size:12.5px;cursor:pointer;">Batal</button>
-          <button type="button" id="nmSaveConnBtn" style="padding:8px 16px;border-radius:7px;border:none;background:linear-gradient(135deg,#f0c840,#d4af37);color:#0a0c10;font-weight:700;font-size:12.5px;cursor:pointer;">Simpan & Terapkan</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-    document.getElementById('nmSaveConnBtn').onclick = function() {
-      const picked = modal.querySelector('input[name="nmConnMode"]:checked')?.value || 'offline';
-      const srv = document.getElementById('nmServerUrlInput')?.value.trim() || '';
-      localStorage.setItem(STORAGE_KEY_MODE, picked);
-      if (srv) localStorage.setItem(STORAGE_KEY_SERVER_URL, srv);
-      modal.remove();
-      window.location.reload();
-    };
-  };
-
-  document.addEventListener('DOMContentLoaded', () => {
-    if ('serviceWorker' in navigator && (window.location.protocol === 'http:' || window.location.protocol === 'https:')) {
-      navigator.serviceWorker.register('/static/sw.js').catch(() => {});
-    }
-    if (isFileProtocol || isStandaloneDoc) {
-      const pill = document.createElement('button');
-      pill.type = 'button';
-      pill.onclick = window.showMobileConnectionModal;
-      const mode = getConnMode();
-      pill.style.cssText = 'position:fixed;bottom:14px;left:14px;z-index:9999;background:rgba(18,21,28,0.92);border:1px solid rgba(212,175,55,0.45);color:#f0c840;padding:6px 11px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,0.6);display:flex;align-items:center;gap:5px;';
-      pill.innerHTML = mode === 'offline' ? '📱 Mode Offline HP ⚙️' : '🌐 Mode Server PC ⚙️';
-      document.body.appendChild(pill);
-    }
-  });
-})();
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
 """
+        manifest_path = tmp_dir / "AndroidManifest.xml"
+        manifest_path.write_text(manifest_xml, encoding="utf-8")
 
-Path("static/js/mobile_offline_engine.js").write_text(mobile_engine_js, encoding="utf-8")
-print("Created static/js/mobile_offline_engine.js")
+        # 2. Resources (icon + strings)
+        res_dir = tmp_dir / "res"
+        (res_dir / "mipmap-xxxhdpi").mkdir(parents=True, exist_ok=True)
+        (res_dir / "values").mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT_DIR / "static" / "img" / "logo.png", res_dir / "mipmap-xxxhdpi" / "ic_launcher.png")
+        (res_dir / "values" / "strings.xml").write_text(
+            '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <string name="app_name">NumisManager</string>\n</resources>\n',
+            encoding="utf-8"
+        )
+
+        # 3. Compile & Link resources with aapt2
+        compiled_res = tmp_dir / "compiled_res.zip"
+        unaligned_apk = tmp_dir / "unaligned.apk"
+        gen_dir = tmp_dir / "gen"
+        gen_dir.mkdir(parents=True, exist_ok=True)
+
+        subprocess.run([str(aapt2), "compile", "--dir", str(res_dir), "-o", str(compiled_res)], check=True)
+        subprocess.run([
+            str(aapt2), "link",
+            "-o", str(unaligned_apk),
+            "-I", str(platform_jar),
+            "--manifest", str(manifest_path),
+            "--java", str(gen_dir),
+            str(compiled_res)
+        ], check=True)
+
+        # 4. Write MainActivity.java
+        src_pkg = tmp_dir / "src" / "id" / "numismanager" / "app"
+        src_pkg.mkdir(parents=True, exist_ok=True)
+        main_activity_java = """package id.numismanager.app;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Bundle;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.graphics.Color;
+
+public class MainActivity extends Activity {
+    private WebView webView;
+    private ValueCallback<Uri[]> filePathCallback;
+    private static final int FILE_CHOOSER_RESULT_CODE = 1001;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        webView = new WebView(this);
+        webView.setBackgroundColor(Color.parseColor("#0a0c10"));
+        setContentView(webView);
+
+        WebSettings settings = webView.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setDatabaseEnabled(true);
+        settings.setAllowFileAccess(true);
+        settings.setAllowContentAccess(true);
+        settings.setAllowFileAccessFromFileURLs(true);
+        settings.setAllowUniversalAccessFromFileURLs(true);
+        settings.setLoadWithOverviewMode(true);
+        settings.setUseWideViewPort(true);
+        settings.setSupportZoom(true);
+        settings.setBuiltInZoomControls(true);
+        settings.setDisplayZoomControls(false);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("file://")) {
+                    return false;
+                }
+                try {
+                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                    startActivity(intent);
+                } catch (Exception e) {}
+                return true;
+            }
+        });
+
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+                if (MainActivity.this.filePathCallback != null) {
+                    MainActivity.this.filePathCallback.onReceiveValue(null);
+                }
+                MainActivity.this.filePathCallback = filePathCallback;
+
+                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("image/*");
+                intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+
+                try {
+                    startActivityForResult(Intent.createChooser(intent, "Pilih Foto Koleksi"), FILE_CHOOSER_RESULT_CODE);
+                } catch (Exception e) {
+                    MainActivity.this.filePathCallback = null;
+                    return false;
+                }
+                return true;
+            }
+        });
+
+        webView.loadUrl("file:///android_asset/www/index.html");
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == FILE_CHOOSER_RESULT_CODE) {
+            if (filePathCallback == null) return;
+            Uri[] results = null;
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                if (data.getClipData() != null) {
+                    int count = data.getClipData().getItemCount();
+                    results = new Uri[count];
+                    for (int i = 0; i < count; i++) {
+                        results[i] = data.getClipData().getItemAt(i).getUri();
+                    }
+                } else if (data.getData() != null) {
+                    results = new Uri[]{ data.getData() };
+                }
+            }
+            filePathCallback.onReceiveValue(results);
+            filePathCallback = null;
+        } else {
+            super.onActivityResult(requestCode, resultCode, data);
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (webView != null && webView.canGoBack()) {
+            webView.goBack();
+        } else {
+            super.onBackPressed();
+        }
+    }
+}
+"""
+        main_java_path = src_pkg / "MainActivity.java"
+        main_java_path.write_text(main_activity_java, encoding="utf-8")
+
+        # 5. Compile Java -> .class -> classes.dex
+        classes_dir = tmp_dir / "classes"
+        classes_dir.mkdir(parents=True, exist_ok=True)
+        r_java_path = gen_dir / "id" / "numismanager" / "app" / "R.java"
+
+        subprocess.run([
+            "javac",
+            "--release", "11",
+            "-cp", str(platform_jar),
+            "-d", str(classes_dir),
+            str(r_java_path),
+            str(main_java_path)
+        ], check=True)
+
+        class_files = [str(p) for p in classes_dir.rglob("*.class")]
+        subprocess.run([
+            str(d8_bat),
+            "--lib", str(platform_jar),
+            "--min-api", "21",
+            "--output", str(tmp_dir),
+            *class_files
+        ], check=True)
+
+        # 6. Prepare assets/www and bundle classes.dex + assets/www into unaligned.apk
+        assets_www = tmp_dir / "assets" / "www"
+        prepare_mobile_www_bundle(assets_www)
+
+        with zipfile.ZipFile(unaligned_apk, "a", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.write(tmp_dir / "classes.dex", "classes.dex")
+            for f in (tmp_dir / "assets").rglob("*"):
+                if f.is_file():
+                    rel = f.relative_to(tmp_dir).as_posix()
+                    # Do not add user uploaded photos from PC database to keep APK lightweight
+                    if "static/uploads/" in rel and not rel.endswith(".gitkeep"):
+                        continue
+                    zf.write(f, rel)
+
+        # 7. Zipalign & Sign APK
+        aligned_apk = tmp_dir / "aligned.apk"
+        subprocess.run([str(zipalign), "-f", "-p", "4", str(unaligned_apk), str(aligned_apk)], check=True)
+
+        keystore_path = tmp_dir / "numis_release.keystore"
+        subprocess.run([
+            "keytool", "-genkeypair",
+            "-v",
+            "-keystore", str(keystore_path),
+            "-storepass", "numis123",
+            "-keypass", "numis123",
+            "-alias", "numiskey",
+            "-keyalg", "RSA",
+            "-keysize", "2048",
+            "-validity", "10000",
+            "-dname", "CN=NumisManager, OU=NumismaticSuite, O=NumisManager, L=Jakarta, S=DKI, C=ID"
+        ], check=True)
+
+        final_apk = SMARTPHONE_DIR / "NumisManager-Android-v1.0.0.apk"
+        subprocess.run([
+            str(apksigner_bat), "sign",
+            "--ks", str(keystore_path),
+            "--ks-pass", "pass:numis123",
+            "--key-pass", "pass:numis123",
+            "--out", str(final_apk),
+            str(aligned_apk)
+        ], check=True)
+
+        print(f"Successfully built signed Android APK: {final_apk} ({final_apk.stat().st_size / 1024:.1f} KB)")
+        return assets_www
+    finally:
+        pass
+
+
+# ==============================================================================
+# 4. BUILD iOS PACKAGES (.mobileconfig, .ipa, & Standalone Single-File App)
+# ==============================================================================
+def build_ios_packages(assets_www: Path):
+    # 4A. Build Single-File Standalone Offline HTML for iOS & Android
+    try:
+        from PIL import Image
+        import io
+        im = Image.open(ROOT_DIR / "static" / "img" / "logo.png")
+        im.thumbnail((128, 128))
+        buf = io.BytesIO()
+        im.save(buf, format="PNG", optimize=True)
+        logo_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    except Exception:
+        logo_b64 = base64.b64encode((ROOT_DIR / "static" / "img" / "logo.png").read_bytes()).decode("ascii")
+    logo_data_uri = f"data:image/png;base64,{logo_b64}"
+
+    css_all = "\n".join([
+        (ROOT_DIR / "static" / "css" / "style.css").read_text(encoding="utf-8"),
+        (ROOT_DIR / "static" / "css" / "components.css").read_text(encoding="utf-8"),
+        (ROOT_DIR / "static" / "css" / "album.css").read_text(encoding="utf-8"),
+    ])
+
+    js_files_order = [
+        "mobile_offline_engine.js",
+        "api.js",
+        "auth.js",
+        "dashboard.js",
+        "pembelian.js",
+        "koleksi.js",
+        "penjualan.js",
+        "supplier.js",
+        "manajemen_data.js",
+        "laporan.js",
+        "album.js",
+        "backup.js"
+    ]
+    chart_js = (ROOT_DIR / "static" / "vendor" / "chartjs" / "chart.umd.min.js").read_text(encoding="utf-8")
+    all_app_js = "\n;\n".join([
+        (ROOT_DIR / "static" / "js" / fn).read_text(encoding="utf-8")
+        for fn in js_files_order
+    ])
+    all_app_js = all_app_js.replace("/static/img/logo.png", logo_data_uri)
+
+    # Extract body innerHTML of app.html (up to <!-- Application Scripts -->)
+    app_raw = (ROOT_DIR / "templates" / "app.html").read_text(encoding="utf-8")
+    body_start = app_raw.find("<body>") + len("<body>")
+    scripts_marker = app_raw.find("<!-- Application Scripts -->")
+    app_body_markup = app_raw[body_start:scripts_marker].replace("/static/img/logo.png", logo_data_uri)
+
+    router_start = app_raw.find("<!-- Router & Initializer -->")
+    router_end = app_raw.rfind("</body>")
+    router_script_block = app_raw[router_start:router_end]
+
+    standalone_html = f"""<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="NumisManager">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0a0c10">
+  <title>NumisManager Mobile (Android &amp; iOS)</title>
+  <link rel="icon" type="image/png" href="{logo_data_uri}">
+  <link rel="apple-touch-icon" href="{logo_data_uri}">
+  <style>
+{css_all}
+  </style>
+  <script>
+    window.__NUMIS_STANDALONE_MOBILE__ = true;
+    // Auto-authenticate default mobile session if not logged in yet
+    if (!localStorage.getItem('numis_token')) {{
+      localStorage.setItem('numis_token', 'mobile-offline-token-1');
+      localStorage.setItem('numis_user', JSON.stringify({{ id: 1, username: 'admin', nama_lengkap: 'Administrator Mobile', role: 'admin' }}));
+    }}
+  </script>
+</head>
+<body>
+{app_body_markup}
+  <script>
+{chart_js}
+  </script>
+  <script>
+{all_app_js}
+  </script>
+  {router_script_block}
+</body>
+</html>
+"""
+    standalone_path = SMARTPHONE_DIR / "NumisManager-Mobile-Offline-Standalone.html"
+    standalone_path.write_text(standalone_html, encoding="utf-8")
+    print(f"Created Universal Standalone Mobile HTML: {standalone_path} ({standalone_path.stat().st_size / 1024:.1f} KB)")
+
+    # 4B. Build iOS .mobileconfig WebClip Installer Profile
+    # Embeds the standalone HTML as a data URL or local launcher so installing the profile on iPhone/iPad creates a Fullscreen Home Screen App!
+    standalone_b64 = base64.b64encode(standalone_html.encode("utf-8")).decode("ascii")
+    standalone_data_url = f"data:text/html;base64,{standalone_b64}"
+
+    mobileconfig_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PayloadContent</key>
+    <array>
+        <dict>
+            <key>FullScreen</key>
+            <true/>
+            <key>Icon</key>
+            <data>{logo_b64}</data>
+            <key>IgnoreManifestScope</key>
+            <true/>
+            <key>IsRemovable</key>
+            <true/>
+            <key>Label</key>
+            <string>NumisManager</string>
+            <key>PayloadDescription</key>
+            <string>Instal Aplikasi NumisManager ke Layar Utama iOS (iPhone / iPad)</string>
+            <key>PayloadDisplayName</key>
+            <string>NumisManager WebClip</string>
+            <key>PayloadIdentifier</key>
+            <string>id.numismanager.ios.webclip</string>
+            <key>PayloadType</key>
+            <string>com.apple.webClip.managed</string>
+            <key>PayloadUUID</key>
+            <string>{str(uuid.uuid4()).upper()}</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+            <key>Precomposed</key>
+            <true/>
+            <key>URL</key>
+            <string>{standalone_data_url}</string>
+        </dict>
+    </array>
+    <key>PayloadDescription</key>
+    <string>Paket Instalasi Aplikasi NumisManager (Numismatic Asset &amp; Inventory Suite) untuk iOS / iPadOS. Berjalan 100% Offline maupun terhubung ke Server PC.</string>
+    <key>PayloadDisplayName</key>
+    <string>NumisManager (iOS App Installer)</string>
+    <key>PayloadIdentifier</key>
+    <string>id.numismanager.ios.profile</string>
+    <key>PayloadOrganization</key>
+    <string>NumisManager Suite</string>
+    <key>PayloadRemovalDisallowed</key>
+    <false/>
+    <key>PayloadType</key>
+    <string>Configuration</string>
+    <key>PayloadUUID</key>
+    <string>{str(uuid.uuid4()).upper()}</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+</dict>
+</plist>
+"""
+    mobileconfig_path = SMARTPHONE_DIR / "NumisManager-iOS-v1.0.0.mobileconfig"
+    mobileconfig_path.write_text(mobileconfig_xml, encoding="utf-8")
+    print(f"Created iOS Configuration Profile Installer: {mobileconfig_path} ({mobileconfig_path.stat().st_size / 1024:.1f} KB)")
+
+    # 4C. Build iOS .ipa Archive (Payload/NumisManager.app) for iOS Sideloading (AltStore / Sideloadly / TrollStore)
+    ipa_tmp = ROOT_DIR / "_tmp_ipa_build"
+    if ipa_tmp.exists():
+        shutil.rmtree(ipa_tmp)
+    app_bundle = ipa_tmp / "Payload" / "NumisManager.app"
+    app_bundle.mkdir(parents=True, exist_ok=True)
+
+    info_plist = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key>
+    <string>NumisManager</string>
+    <key>CFBundleExecutable</key>
+    <string>NumisManager</string>
+    <key>CFBundleIconFile</key>
+    <string>Icon.png</string>
+    <key>CFBundleIdentifier</key>
+    <string>id.numismanager.app</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>NumisManager</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+    <key>MinimumOSVersion</key>
+    <string>14.0</string>
+    <key>UIRequiredDeviceCapabilities</key>
+    <array>
+        <string>arm64</string>
+    </array>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+</dict>
+</plist>
+"""
+    (app_bundle / "Info.plist").write_text(info_plist, encoding="utf-8")
+    (app_bundle / "PkgInfo").write_text("APPL????", encoding="utf-8")
+    shutil.copy2(ROOT_DIR / "static" / "img" / "logo.png", app_bundle / "Icon.png")
+    shutil.copytree(assets_www, app_bundle / "www", dirs_exist_ok=True)
+
+    ipa_path = SMARTPHONE_DIR / "NumisManager-iOS-v1.0.0.ipa"
+    with zipfile.ZipFile(ipa_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for f in (ipa_tmp / "Payload").rglob("*"):
+            if f.is_file():
+                rel = f.relative_to(ipa_tmp).as_posix()
+                if "static/uploads/" in rel and not rel.endswith(".gitkeep"):
+                    continue
+                zf.write(f, rel)
+
+    print(f"Created iOS IPA Archive: {ipa_path} ({ipa_path.stat().st_size / 1024:.1f} KB)")
+
+    # Cleanup temp folders
+    shutil.rmtree(ROOT_DIR / "_tmp_apk_build", ignore_errors=True)
+    shutil.rmtree(ipa_tmp, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    www_dir = build_android_apk()
+    build_ios_packages(www_dir)
+    print("ALL SMARTPHONE PACKAGES BUILT SUCCESSFULLY!")

@@ -80,7 +80,7 @@ def copy_app_tree_to(staging_dir: Path):
     # Copy database (schema.sql, db.py, __init__.py, without personal numismatik.db)
     db_staging = staging_dir / "database"
     db_staging.mkdir(parents=True, exist_ok=True)
-    for fn in ["__init__.py", "db.py", "schema.sql"]:
+    for fn in ["__init__.py", "db.py", "models.py", "migration_runner.py", "schema.sql"]:
         src = ROOT_DIR / "database" / fn
         if src.exists():
             shutil.copy2(src, db_staging / fn)

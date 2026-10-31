@@ -56,6 +56,26 @@ CREATE_TABLES_SQL = [
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS lot_pembelian (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        kode_lot TEXT UNIQUE NOT NULL,
+        nama_lot TEXT NOT NULL,
+        harga_lot_total REAL DEFAULT 0,
+        ongkir_lot REAL DEFAULT 0,
+        metode_alokasi TEXT DEFAULT 'proporsional_qty',
+        batch_id INTEGER REFERENCES batch_pembelian(id) ON DELETE SET NULL,
+        supplier_id INTEGER REFERENCES supplier(id),
+        perolehan TEXT,
+        link_pembelian TEXT,
+        tanggal_beli TEXT,
+        status TEXT DEFAULT 'pesan',
+        catatan TEXT,
+        created_by INTEGER REFERENCES users(id),
+        created_at TEXT DEFAULT (datetime('now','localtime')),
+        updated_at TEXT DEFAULT (datetime('now','localtime'))
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS koleksi (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         kode_item TEXT UNIQUE,
@@ -79,6 +99,7 @@ CREATE_TABLES_SQL = [
         foto_rev TEXT,
         supplier_id INTEGER REFERENCES supplier(id),
         batch_id INTEGER REFERENCES batch_pembelian(id),
+        lot_id INTEGER REFERENCES lot_pembelian(id) ON DELETE SET NULL,
         group_id INTEGER REFERENCES group_item(id),
         perolehan TEXT,
         link_pembelian TEXT,
@@ -259,6 +280,25 @@ class BatchUpdate(BaseModel):
     is_final_ok: Optional[int] = None
     catatan: Optional[str] = None
 
+class BatchCopyRequest(BaseModel):
+    nama_batch: Optional[str] = None
+    supplier_id: Optional[int] = None
+    total_ongkir: Optional[float] = None
+    perolehan: Optional[str] = None
+    link_pembelian: Optional[str] = None
+    tanggal_beli: Optional[str] = None
+    status: Optional[str] = "pesan"
+    catatan: Optional[str] = None
+    copy_items: bool = True
+    copy_photos: bool = True
+    reset_checklist: bool = True
+
+class BatchBulkDeleteRequest(BaseModel):
+    batch_ids: List[int]
+
+class BatchItemsBulkDeleteRequest(BaseModel):
+    item_ids: List[int]
+
 class BatchResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -307,6 +347,7 @@ class KoleksiCreate(BaseModel):
     grading_url: Optional[str] = None
     supplier_id: Optional[int] = None
     batch_id: Optional[int] = None
+    lot_id: Optional[int] = None
     group_id: Optional[int] = None
     perolehan: Optional[str] = None
     link_pembelian: Optional[str] = None
@@ -318,6 +359,7 @@ class KoleksiCreate(BaseModel):
     harga_jual: float = 0.0
     status_koleksi: Optional[str] = "stock_jual"
     is_checked: Optional[int] = 0
+    copy_gallery_from_id: Optional[int] = None
 
 class KoleksiUpdate(BaseModel):
     kode_item: Optional[str] = None
@@ -346,6 +388,7 @@ class KoleksiUpdate(BaseModel):
     grading_url: Optional[str] = None
     supplier_id: Optional[int] = None
     batch_id: Optional[int] = None
+    lot_id: Optional[int] = None
     group_id: Optional[int] = None
     perolehan: Optional[str] = None
     link_pembelian: Optional[str] = None
@@ -521,3 +564,56 @@ class AlbumItemBulkAdd(BaseModel):
     start_halaman: Optional[int] = 1
 
 
+
+
+# Lot Pembelian Models
+class LotItemInput(BaseModel):
+    nama_item: str
+    nomor_seri: Optional[str] = None
+    tahun: Optional[str] = None
+    denominasi: Optional[str] = None
+    nominal: Optional[str] = None
+    grade: Optional[str] = "UNC"
+    jenis: Optional[str] = "uang_kertas"
+    negara: Optional[str] = "Indonesia"
+    tanggal_beli: Optional[str] = None
+    link_pembelian: Optional[str] = None
+    group_id: Optional[int] = None
+    qty: int = 1
+    harga_alokasi: Optional[float] = None
+    harga_jual: float = 0.0
+    detail: Optional[str] = None
+    catatan_internal: Optional[str] = None
+    lembaga_grading: Optional[str] = "-"
+    nomor_sertifikasi: Optional[str] = None
+    grade_numerik: Optional[str] = None
+    grading_url: Optional[str] = None
+
+class LotCreateRequest(BaseModel):
+    nama_lot: str
+    harga_lot_total: float = 0.0
+    ongkir_lot: float = 0.0
+    metode_alokasi: Optional[str] = "proporsional_qty"
+    batch_id: Optional[int] = None
+    supplier_id: Optional[int] = None
+    perolehan: Optional[str] = None
+    link_pembelian: Optional[str] = None
+    tanggal_beli: Optional[str] = None
+    status: Optional[str] = "terima"
+    status_koleksi: Optional[str] = "stock_jual"
+    catatan: Optional[str] = None
+    items: List[LotItemInput]
+
+class LotItemAllocationUpdate(BaseModel):
+    koleksi_id: int
+    harga: float
+
+class LotUpdateRequest(BaseModel):
+    nama_lot: Optional[str] = None
+    harga_lot_total: Optional[float] = None
+    ongkir_lot: Optional[float] = None
+    metode_alokasi: Optional[str] = None
+    link_pembelian: Optional[str] = None
+    tanggal_beli: Optional[str] = None
+    catatan: Optional[str] = None
+    item_allocations: Optional[List[LotItemAllocationUpdate]] = None

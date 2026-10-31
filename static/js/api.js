@@ -891,7 +891,7 @@ const SmartPhotoManager = {
           <div id="${prefix}ExistingSupportContainer" style="display:none; margin-top:10px;"></div>
 
           <!-- Newly Queued Supporting Photos -->
-          <div id="${prefix}SupportQueueContainer" style="display:none; margin-top:10px;"></div>
+          <div id="${prefix}SupportQueueContainer" style="display:none; margin-top:12px; margin-bottom:24px; padding-bottom:16px;"></div>
         ` : ''}
       </div>
     `;
@@ -1206,9 +1206,12 @@ const SmartPhotoManager = {
     }
 
     container.style.display = 'block';
+    container.style.marginTop = '12px';
+    container.style.marginBottom = '24px';
+    container.style.paddingBottom = '16px';
     container.innerHTML = `
-      <div style="font-size:11.5px; font-weight:700; color:#4caf50; margin-bottom:6px;">
-        ➕ Antrean Gambar Pendukung Baru (${ctx.supportingQueue.length} siap disimpan):
+      <div style="font-size:11.5px; font-weight:700; color:#4caf50; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
+        <span>🖼️ ➕ Antrean Gambar Pendukung Baru (${ctx.supportingQueue.length} siap disimpan):</span>
       </div>
       <div class="supporting-queue-grid">
         ${ctx.supportingQueue.map(item => `
@@ -1235,6 +1238,9 @@ const SmartPhotoManager = {
         `).join('')}
       </div>
     `;
+    setTimeout(() => {
+      container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 60);
   },
 
   async uploadAllForKoleksi(prefix, koleksiId) {
@@ -1470,11 +1476,17 @@ const SmartPhotoManager = {
     // 2. Cari section foto yang sedang aktif (prioritaskan di dalam modal yang sedang terbuka)
     const modalOverlay = document.getElementById('modalOverlay');
     let section = null;
-    if (modalOverlay && modalOverlay.classList.contains('show')) {
-      section = modalOverlay.querySelector('.smart-photo-section');
+    if (modalOverlay && !modalOverlay.classList.contains('hidden')) {
+      const visibleSections = Array.from(modalOverlay.querySelectorAll('.smart-photo-section')).filter(s => s.offsetParent !== null);
+      if (visibleSections.length > 0) {
+        section = visibleSections[0];
+      }
     }
     if (!section) {
-      section = document.querySelector('.smart-photo-section');
+      const visibleSections = Array.from(document.querySelectorAll('.smart-photo-section')).filter(s => s.offsetParent !== null);
+      if (visibleSections.length > 0) {
+        section = visibleSections[0];
+      }
     }
     if (!section) return null;
 

@@ -4,7 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NumisManager - Numismatic Asset Management</title>
+  <meta name="theme-color" content="#0a0c10">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="NumisManager">
   <link rel="icon" type="image/png" href="/static/img/logo.png">
+  <link rel="apple-touch-icon" href="/static/img/logo.png">
+  <link rel="manifest" href="/static/manifest.json">
   
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,9 +18,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="/static/css/style.css?v=23">
-  <link rel="stylesheet" href="/static/css/components.css?v=23">
-  <link rel="stylesheet" href="/static/css/album.css?v=23">
+  <link rel="stylesheet" href="/static/css/style.css?v=26">
+  <link rel="stylesheet" href="/static/css/components.css?v=36">
+  <link rel="stylesheet" href="/static/css/album.css?v=26">
 
   <!-- Chart.js (Local Vendor with CDN Fallback) -->
   <script src="/static/vendor/chartjs/chart.umd.min.js"></script>
@@ -64,6 +70,12 @@
         <a href="#album" class="nav-item" data-page="album" data-tooltip="Album Digital">
           <span class="nav-icon">📖</span>
           <span class="nav-label">Album Digital</span>
+        </a>
+
+        <div class="nav-section-label">KREATIVITAS &amp; MEDIA</div>
+        <a href="#kreativitas" class="nav-item" data-page="kreativitas" data-tooltip="Kreativitas">
+          <span class="nav-icon">✨</span>
+          <span class="nav-label">Kreativitas</span>
         </a>
 
         <div class="nav-section-label">TRANSAKSI &amp; RELASI</div>
@@ -169,17 +181,18 @@
   <div id="toastContainer" class="toast-container"></div>
 
   <!-- Application Scripts -->
-  <script src="/static/js/api.js?v=23"></script>
-  <script src="/static/js/auth.js?v=23"></script>
-  <script src="/static/js/dashboard.js?v=23"></script>
-  <script src="/static/js/pembelian.js?v=23"></script>
-  <script src="/static/js/koleksi.js?v=23"></script>
-  <script src="/static/js/penjualan.js?v=23"></script>
-  <script src="/static/js/supplier.js?v=23"></script>
-  <script src="/static/js/manajemen_data.js?v=23"></script>
-  <script src="/static/js/laporan.js?v=23"></script>
-  <script src="/static/js/album.js?v=23"></script>
-  <script src="/static/js/backup.js?v=23"></script>
+  <script src="/static/js/api.js?v=36"></script>
+  <script src="/static/js/auth.js?v=26"></script>
+  <script src="/static/js/dashboard.js?v=26"></script>
+  <script src="/static/js/pembelian.js?v=42"></script>
+  <script src="/static/js/koleksi.js?v=26"></script>
+  <script src="/static/js/penjualan.js?v=26"></script>
+  <script src="/static/js/supplier.js?v=26"></script>
+  <script src="/static/js/manajemen_data.js?v=26"></script>
+  <script src="/static/js/laporan.js?v=26"></script>
+  <script src="/static/js/album.js?v=26"></script>
+  <script src="/static/js/backup.js?v=26"></script>
+  <script src="/static/js/kreativitas.js?v=39"></script>
 
   <!-- Router & Initializer -->
   <script>
@@ -202,6 +215,9 @@
           'pembelian-batch':  { title: 'Pembelian Batch',     subtitle: 'Manajemen pembelian koleksi lot atau lelang berganda',       handler: () => loadPembelianBatch() },
           'koleksi':          { title: 'Koleksi & Stok',      subtitle: 'Katalog lengkap inventaris uang kuno dan koin',              handler: () => loadKoleksi() },
           'album':            { title: 'Album Digital',       subtitle: 'Pameran visual buku album & lembaran katalog mika koleksi',  handler: () => loadAlbum() },
+          'kreativitas':      { title: 'Studio Kreativitas',  subtitle: 'Buat kolase visual foto dan video slide show koleksi numismatik', handler: () => loadKreativitas('collage') },
+          'collage-maker':    { title: 'Collage Maker',       subtitle: 'Buat kolase visual foto koin dan uang kertas numismatik',                 handler: () => loadKreativitas('collage') },
+          'slideshow-maker':  { title: 'Slide Show Maker',    subtitle: 'Buat video animasi presentasi slide show koleksi numismatik',            handler: () => loadKreativitas('slideshow') },
           'penjualan':        { title: 'Penjualan',           subtitle: 'Pencatatan transaksi jual & evaluasi laba per item',         handler: () => loadPenjualan() },
           'manajemen-data':   { title: 'Manajemen Data',      subtitle: 'Master data Group Item, Supplier, dan Rekanan',              handler: () => loadManajemenData() },
           'supplier':         { title: 'Manajemen Data',      subtitle: 'Master data Group Item, Supplier, dan Rekanan',              handler: () => loadManajemenData('supplier') },
@@ -223,7 +239,9 @@
           document.title = `${route.title} - NumisManager`;
 
           document.querySelectorAll('.sidebar-nav .nav-item').forEach(item => {
-            item.classList.toggle('active', item.getAttribute('data-page') === pageId);
+            const dp = item.getAttribute('data-page');
+            const isActive = dp === pageId || ((pageId === 'collage-maker' || pageId === 'slideshow-maker') && dp === 'kreativitas');
+            item.classList.toggle('active', isActive);
           });
 
           // Close mobile overlay sidebar on navigate

@@ -230,6 +230,7 @@ function toggleAdvancedFilter() {
   if (arrow) arrow.textContent = isAdvFilterOpen ? '▲' : '▼';
   if (isAdvFilterOpen) {
     loadBatchesIntoAdvFilter();
+    loadLotsIntoAdvFilter();
   }
 }
 
@@ -261,6 +262,7 @@ function resetAllKoleksiFilters() {
   const elNomorSeri = document.getElementById('advNomorSeri'); if (elNomorSeri) elNomorSeri.value = '';
   const elKodeItem = document.getElementById('advKodeItem'); if (elKodeItem) elKodeItem.value = '';
   const elBatchId = document.getElementById('advBatchId'); if (elBatchId) elBatchId.value = '';
+  const elLotId = document.getElementById('advLotId'); if (elLotId) elLotId.value = '';
   const elCatatan = document.getElementById('advCatatan'); if (elCatatan) elCatatan.value = '';
   loadKoleksi(1);
 }
@@ -370,7 +372,10 @@ function renderKoleksiTable(data, total, page) {
             <span style="font-weight:600; color:var(--text-primary); cursor:pointer;" onclick="showViewItemModal(${item.id})" title="Klik untuk lihat rincian">${escapeHtml(item.nama_item)}</span>
             ${hasPhoto ? `<span class="photo-indicator" title="Arahkan kursor untuk melihat foto depan/belakang" onclick="showViewItemModal(${item.id})">📷</span>` : ''}
           </div>
-          ${item.group_nama ? `<div style="margin-top:2px;"><span class="badge badge-group" style="font-size:10px; padding:1px 6px; cursor:pointer;" onclick="filterByGroupDirect(${item.group_id})" title="Filter group: ${escapeHtml(item.group_nama)}">🗂️ ${escapeHtml(item.group_nama)}</span></div>` : ''}
+          <div style="display:flex; gap:5px; flex-wrap:wrap; margin-top:2px;">
+            ${item.lot_id ? `<span class="badge" style="background:rgba(212,175,55,0.16); color:var(--gold-light); border:1px solid var(--border-gold); font-size:10px; padding:1px 6px; cursor:pointer;" onclick="event.stopPropagation(); showLotTraceModal(${item.lot_id})" title="Bagian dari Paket Lot: ${escapeHtml(item.lot_nama || item.lot_kode || ('Lot #' + item.lot_id))} (Total 1 Lot: ${formatRupiah(item.lot_harga_total || 0)} untuk ${item.lot_item_count || 1} item). Klik untuk Trace &amp; Kelola Lot.">🎁 ${escapeHtml(item.lot_kode || ('LOT-' + item.lot_id))} (${item.lot_item_count || 1} item • Lot ${formatRupiah(item.lot_harga_total || 0)})</span>` : ''}
+            ${item.group_nama ? `<span class="badge badge-group" style="font-size:10px; padding:1px 6px; cursor:pointer;" onclick="filterByGroupDirect(${item.group_id})" title="Filter group: ${escapeHtml(item.group_nama)}">🗂️ ${escapeHtml(item.group_nama)}</span>` : ''}
+          </div>
           ${photoTooltipHtml}
         </td>
         <td class="col-sn">
@@ -386,6 +391,7 @@ function renderKoleksiTable(data, total, page) {
         <td class="col-aksi">
           <div class="td-actions" style="justify-content:center;">
             <button class="btn btn-secondary btn-icon" title="Lihat Rincian &amp; Galeri Foto Lengkap" onclick="showViewItemModal(${item.id})">👁️</button>
+            <button class="btn btn-secondary btn-icon" title="Copy &amp; Edit Koleksi (Salin data item ini untuk langsung diedit sebagian)" onclick="showCopyAndEditKoleksiModal(${item.id})">📋</button>
             <button class="btn btn-secondary btn-icon" title="Edit Koleksi" onclick="showEditKoleksiModal(${item.id})">✏️</button>
             <button class="btn btn-secondary btn-icon" title="Cetak Label Holder (2x2 inci)" onclick="printHolderLabel(${item.id})">🏷️</button>
             <button class="btn btn-secondary btn-icon" title="Kelola Foto &amp; Galeri Multi-Foto (OBV/REV, Watermark, Slab, dll.)" onclick="showUploadFotoModal(${item.id}, '${escapeHtml(item.nama_item)}')">📸</button>
@@ -552,6 +558,11 @@ async function showViewItemModal(id) {
                     Single (Non-Batch)
                   </span>
                 `}
+                ${item.lot_id ? `
+                  <span class="badge" onclick="closeModal(); showLotTraceModal(${item.lot_id})" style="background:rgba(212,175,55,0.18); color:var(--gold-light); border:1px solid var(--border-gold); font-size:11.5px; cursor:pointer;" title="Klik untuk melihat seluruh item dalam Paket Lot ini">
+                    🎁 Paket Lot: ${escapeHtml(item.lot_kode || ('#' + item.lot_id))} (${item.lot_item_count || 1} item • Total Lot ${formatRupiah(item.lot_harga_total || 0)}) ↗
+                  </span>
+                ` : ''}
                 ${item.group_nama ? `
                   <span class="badge badge-group" style="font-size:11.5px;">
                     🗂️ ${escapeHtml(item.group_nama)}
@@ -624,6 +635,16 @@ async function showViewItemModal(id) {
                 <div style="font-size:11px; color:var(--text-muted);">Supplier &amp; Tanggal Beli</div>
                 <div style="font-weight:600; color:var(--text-primary); font-size:12.5px;">${escapeHtml(item.supplier_nama || item.perolehan || '-')} ${item.tanggal_beli ? `• ${formatDate(item.tanggal_beli)}` : ''}</div>
               </div>
+              <div>
+                <div style="font-size:11px; color:var(--text-muted);">Link Pembelian</div>
+                <div style="font-weight:600; font-size:12.5px;">
+                  ${(item.link_pembelian || item.batch_link_pembelian) ? `
+                    <a href="${escapeHtml(item.link_pembelian || item.batch_link_pembelian)}" target="_blank" rel="noopener noreferrer" style="color:var(--info); text-decoration:underline; word-break:break-all;">
+                      🔗 Buka Link Pembelian ↗
+                    </a>
+                  ` : '<span style="color:var(--text-muted);">-</span>'}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -679,6 +700,7 @@ async function showViewItemModal(id) {
       <button type="button" class="btn btn-secondary" onclick="closeModal()">Tutup</button>
       <button type="button" class="btn btn-secondary" onclick="printHolderLabel(${item.id})">🏷️ Cetak Label (2x2")</button>
       <button type="button" class="btn btn-secondary" onclick="closeModal(); showUploadFotoModal(${item.id}, '${escapeHtml(item.nama_item)}')">📸 Unggah / Kelola Foto</button>
+      <button type="button" class="btn btn-secondary" onclick="closeModal(); showCopyAndEditKoleksiModal(${item.id})">📋 Copy &amp; Edit</button>
       <button type="button" class="btn btn-secondary" onclick="closeModal(); showEditKoleksiModal(${item.id})">✏️ Edit Data</button>
       <button type="button" class="btn btn-success" onclick="closeModal(); showQuickSaleModal(${item.id})" ${isHabis ? 'disabled' : ''}>💰 Jual Item</button>
     `;
@@ -990,6 +1012,14 @@ async function showEditKoleksiModal(id) {
         </div>
 
         <div class="form-group">
+          <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>🔗 Link Pembelian / Tautan Lelang / Bukti Transaksi</span>
+            ${(item.link_pembelian || item.batch_link_pembelian) ? `<a href="${escapeHtml(item.link_pembelian || item.batch_link_pembelian)}" target="_blank" rel="noopener noreferrer" style="font-size:11.5px; color:var(--info); text-decoration:underline;">🔗 Buka Link Pembelian ↗</a>` : ''}
+          </label>
+          <input type="text" id="ekLinkPembelian" class="form-control" value="${escapeHtml(item.link_pembelian || '')}" placeholder="cth: https://www.facebook.com/... atau link Tokopedia/Shopee/WA">
+        </div>
+
+        <div class="form-group">
           <label class="form-label">Keterangan / Catatan Item</label>
           <textarea id="ekCatatan" class="form-control" placeholder="Keterangan kondisi, sertifikasi, dll.">${escapeHtml(catatanVal)}</textarea>
         </div>
@@ -999,8 +1029,15 @@ async function showEditKoleksiModal(id) {
     `;
 
     const footer = `
-      <button type="button" class="btn btn-secondary" onclick="closeModal()">Batal</button>
-      <button type="button" class="btn btn-primary" onclick="submitUpdateKoleksi(${id})">Simpan Perubahan</button>
+      <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+        <button type="button" class="btn btn-secondary" onclick="showCopyAndEditKoleksiModal(${id})" title="Salin data item ini sebagai item baru dan langsung edit">
+          📋 Copy &amp; Edit Jadi Item Baru
+        </button>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal()">Batal</button>
+          <button type="button" class="btn btn-primary" onclick="submitUpdateKoleksi(${id})">Simpan Perubahan</button>
+        </div>
+      </div>
     `;
 
     openModal({
@@ -1057,6 +1094,7 @@ async function submitUpdateKoleksi(id) {
     nomor_sertifikasi: document.getElementById('ekNomorSertifikasi')?.value.trim() || null,
     grade_numerik: document.getElementById('ekGradeNumerik')?.value.trim() || null,
     grading_url: document.getElementById('ekGradingUrl')?.value.trim() || null,
+    link_pembelian: document.getElementById('ekLinkPembelian') ? document.getElementById('ekLinkPembelian').value.trim() : null,
     catatan_internal: catatanVal,
     catatan: catatanVal
   };
@@ -1079,6 +1117,351 @@ async function submitUpdateKoleksi(id) {
     }
   } catch (err) {
     showToast('Gagal memperbarui item: ' + err.message, 'error');
+  }
+}
+
+/**
+ * Modal Copy & Edit Koleksi
+ * Mencopy seluruh atribut item sumber ke dalam form edit sehingga pengguna cukup mengubah sebagian data lalu menyimpan sebagai item koleksi baru.
+ */
+async function showCopyAndEditKoleksiModal(id) {
+  try {
+    const item = await API.get(`/koleksi/${id}`);
+    if (!item) throw new Error('Data item asal tidak ditemukan');
+
+    const fotoObv = item.foto_obv || item.foto_path || item.foto_url || item.foto || '';
+    const fotoRev = item.foto_rev || '';
+    const hasSourcePhotos = Boolean(fotoObv || fotoRev || (Array.isArray(item.gallery_fotos) && item.gallery_fotos.length > 0));
+
+    const detailText = item.detail || item.sertifikasi || '';
+    const nominalText = item.denominasi || item.nominal || '';
+    const hargaBeli = item.harga ?? (item.harga_beli ?? 0);
+    const ongkirVal = item.ongkir ?? (item.ongkir_alokasi ?? 0);
+    const catatanVal = item.catatan_internal || item.catatan || '';
+
+    window._copyKoleksiSourceItem = item;
+
+    const body = `
+      <form id="copyKoleksiForm" onsubmit="event.preventDefault(); submitCopyAndEditKoleksi(${id}, false);">
+        <div style="margin-bottom:14px; background:rgba(212,175,55,0.08); border:1px solid var(--border-gold); padding:10px 14px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div>
+            <div style="font-size:12px; color:var(--gold-light); font-weight:700;">
+              📋 Copy &amp; Edit dari Koleksi: <span style="color:var(--text-primary);">${escapeHtml(item.nama_item || '-')}</span>
+              ${item.kode_item ? `<code style="font-size:11px; color:var(--text-muted); margin-left:4px;">(${escapeHtml(item.kode_item)})</code>` : ''}
+            </div>
+            <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">
+              Seluruh data telah disalin otomatis. Silakan ubah bagian yang berbeda (misal: <strong>Nomor Seri</strong>, <strong>Grade</strong>, <strong>Harga</strong>, atau <strong>Foto</strong>) lalu simpan sebagai item baru.
+            </div>
+          </div>
+          ${item.batch_kode ? `<span class="badge" style="background:rgba(91,156,240,0.15); color:var(--info); border:1px solid rgba(91,156,240,0.3); font-size:11px;">📦 Batch: ${escapeHtml(item.batch_kode)}</span>` : ''}
+        </div>
+
+        <div class="data-grid-3">
+          <div class="form-group">
+            <label class="form-label">Kode Item Baru</label>
+            <input type="text" class="form-control" value="Otomatis (ITM-...)" readonly style="background:rgba(255,255,255,0.03); color:var(--gold-light); font-family:monospace;">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nama Item <span class="required">*</span></label>
+            <input type="text" id="ckNama" class="form-control" value="${escapeHtml(item.nama_item || '')}" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nomor Seri (Serial Number)</label>
+            <input type="text" id="ckNomorSeri" class="form-control" value="${escapeHtml(item.nomor_seri || '')}" placeholder="cth: ABC123456 / Solid 888888">
+          </div>
+        </div>
+
+        <div class="data-grid-4">
+          <div class="form-group">
+            <label class="form-label">Group Item / Seri</label>
+            <select id="ckGroupItem" class="form-select">
+              <option value="">Memuat group...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Negara</label>
+            <input type="text" id="ckNegara" class="form-control" value="${escapeHtml(item.negara || 'Indonesia')}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tahun</label>
+            <input type="text" id="ckTahun" class="form-control" value="${escapeHtml(item.tahun || '')}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nominal</label>
+            <input type="text" id="ckNominal" class="form-control" value="${escapeHtml(nominalText)}">
+          </div>
+        </div>
+
+        <div class="data-grid-3">
+          <div class="form-group">
+            <label class="form-label">Jenis</label>
+            <select id="ckJenis" class="form-select">
+              ${JENIS_OPTIONS.map(opt => `<option value="${opt}" ${opt === item.jenis ? 'selected' : ''}>${JENIS_LABELS[opt] || opt}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Grade</label>
+            <select id="ckGrade" class="form-select">
+              ${GRADE_OPTIONS.map(opt => `<option value="${opt}" ${opt === item.grade ? 'selected' : ''}>${opt}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Sertifikasi / Slab</label>
+            <input type="text" id="ckSertifikasi" class="form-control" value="${escapeHtml(detailText)}">
+          </div>
+        </div>
+
+        <!-- Official Grading Certification Section -->
+        <div style="background: rgba(212, 175, 55, 0.05); border: 1px solid var(--border-gold); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+          <div style="font-size: 12px; font-weight: 700; color: var(--gold-light); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+            <span>🏛️ Sertifikasi Lembaga Grading Resmi (Third-Party Grading)</span>
+          </div>
+          <div class="data-grid-4">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">Lembaga Grading</label>
+              <select id="ckLembagaGrading" class="form-select">
+                <option value="">- Tanpa Grading Resmi -</option>
+                <option value="PMG" ${item.lembaga_grading === 'PMG' ? 'selected' : ''}>PMG</option>
+                <option value="PCGS" ${item.lembaga_grading === 'PCGS' ? 'selected' : ''}>PCGS</option>
+                <option value="NGC" ${item.lembaga_grading === 'NGC' ? 'selected' : ''}>NGC</option>
+                <option value="NCS" ${item.lembaga_grading === 'NCS' ? 'selected' : ''}>NCS</option>
+                <option value="ANACS" ${item.lembaga_grading === 'ANACS' ? 'selected' : ''}>ANACS</option>
+                <option value="ICG" ${item.lembaga_grading === 'ICG' ? 'selected' : ''}>ICG</option>
+                <option value="Lainnya" ${item.lembaga_grading === 'Lainnya' ? 'selected' : ''}>Lainnya</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">No. Sertifikasi</label>
+              <input type="text" id="ckNomorSertifikasi" class="form-control" value="${escapeHtml(item.nomor_sertifikasi || '')}" placeholder="cth: 2198371-002">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">Grade Numerik / Label</label>
+              <input type="text" id="ckGradeNumerik" class="form-control" value="${escapeHtml(item.grade_numerik || '')}" placeholder="cth: 66 EPQ / MS65">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">URL Verifikasi</label>
+              <input type="url" id="ckGradingUrl" class="form-control" value="${escapeHtml(item.grading_url || '')}" placeholder="https://www.pmgnotes.com/certlookup/...">
+            </div>
+          </div>
+        </div>
+
+        <div class="data-grid-3">
+          <div class="form-group">
+            <label class="form-label">Qty Total</label>
+            <input type="number" id="ckQty" class="form-control" value="${item.qty || 1}" min="1" oninput="calcCopyKoleksiUnitHint()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Harga Beli Total (Rp)</label>
+            <input type="number" id="ckHargaBeli" class="form-control" value="${hargaBeli}" min="0" oninput="calcCopyKoleksiUnitHint()">
+            <div id="ckHargaBeliUnitHint" style="font-size:11.5px; color:var(--gold-light); font-weight:600; margin-top:4px;"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Alokasi Ongkir (Rp)</label>
+            <input type="number" id="ckOngkir" class="form-control" value="${ongkirVal}" min="0">
+          </div>
+        </div>
+
+        <div class="data-grid-3">
+          <div class="form-group">
+            <label class="form-label">Harga Jual / Pcs (Rp)</label>
+            <input type="number" id="ckHargaJual" class="form-control" value="${item.harga_jual || 0}" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tujuan Koleksi</label>
+            <select id="ckStatusKoleksi" class="form-select">
+              ${STATUS_KOLEKSI_OPTIONS.map(opt => `<option value="${opt}" ${opt === item.status_koleksi ? 'selected' : ''}>${STATUS_KOLEKSI_LABELS[opt] || opt}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Status Pengiriman</label>
+            <select id="ckStatus" class="form-select">
+              ${STATUS_OPTIONS.map(opt => `<option value="${opt}" ${opt === item.status ? 'selected' : ''}>${STATUS_LABELS[opt] || opt}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>🔗 Link Pembelian / Tautan Lelang / Bukti Transaksi</span>
+            ${(item.link_pembelian || item.batch_link_pembelian) ? `<a href="${escapeHtml(item.link_pembelian || item.batch_link_pembelian)}" target="_blank" rel="noopener noreferrer" style="font-size:11.5px; color:var(--info); text-decoration:underline;">🔗 Buka Link Pembelian ↗</a>` : ''}
+          </label>
+          <input type="text" id="ckLinkPembelian" class="form-control" value="${escapeHtml(item.link_pembelian || '')}" placeholder="cth: https://www.facebook.com/... atau link Tokopedia/Shopee/WA">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Keterangan / Catatan Item</label>
+          <textarea id="ckCatatan" class="form-control" placeholder="Keterangan kondisi, sertifikasi, dll.">${escapeHtml(catatanVal)}</textarea>
+        </div>
+
+        ${hasSourcePhotos ? `
+          <label for="ckCopyPhotos" style="display:flex; flex-direction:row; align-items:center; gap:10px; background:rgba(212,175,55,0.08); padding:9px 13px; border-radius:6px; border:1px solid var(--border-gold); margin-bottom:14px; cursor:pointer; user-select:none;">
+            <input type="checkbox" id="ckCopyPhotos" checked style="width:17px; height:17px; accent-color:var(--gold-primary); margin:0; flex-shrink:0; cursor:pointer;">
+            <span style="font-size:12.5px; font-weight:600; color:var(--text-primary);">
+              🖼️ Ikut salin foto OBV, REV &amp; Galeri dari item asal <em>(jika Anda tidak mengunggah/paste foto baru di bawah)</em>
+            </span>
+          </label>
+        ` : ''}
+
+        ${SmartPhotoManager.renderSection('ck', { initialObvUrl: fotoObv, initialRevUrl: fotoRev, showSupporting: true })}
+      </form>
+    `;
+
+    const footer = `
+      <div style="display:flex; justify-content:space-between; width:100%; align-items:center; flex-wrap:wrap; gap:8px;">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Batal</button>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn btn-secondary" id="btnCopyKoleksiSaveMore" onclick="submitCopyAndEditKoleksi(${id}, true)" title="Simpan salinan ini dan tetap buka form untuk lanjut copy item berikutnya">
+            📋 Simpan &amp; Copy Lagi
+          </button>
+          <button type="button" class="btn btn-primary" id="btnCopyKoleksiSaveClose" onclick="submitCopyAndEditKoleksi(${id}, false)">
+            💾 Simpan Salinan Koleksi
+          </button>
+        </div>
+      </div>
+    `;
+
+    openModal({
+      title: `📋 Copy &amp; Edit Item Koleksi (Dari #${id})`,
+      body,
+      footer,
+      size: 'lg'
+    });
+
+    SmartPhotoManager.initContext('ck', {
+      initialObvUrl: fotoObv,
+      initialRevUrl: fotoRev,
+      showSupporting: true
+    });
+    loadGroupItemsIntoDropdown('ckGroupItem', item.group_id, '-- Tanpa Group Item --');
+    calcCopyKoleksiUnitHint();
+
+    setTimeout(() => {
+      const snEl = document.getElementById('ckNomorSeri');
+      if (snEl) {
+        snEl.focus();
+        snEl.select();
+      }
+    }, 80);
+  } catch (err) {
+    showToast('Gagal memuat item untuk dicopy: ' + err.message, 'error');
+  }
+}
+
+function calcCopyKoleksiUnitHint() {
+  const qty = Math.max(1, parseInt(document.getElementById('ckQty')?.value || '1', 10));
+  const harga = parseFloat(document.getElementById('ckHargaBeli')?.value || '0');
+  const hint = document.getElementById('ckHargaBeliUnitHint');
+  if (hint) {
+    const pcs = Math.round(harga / qty);
+    hint.textContent = qty > 1 ? `@ Rp ${pcs.toLocaleString('id-ID')} / pcs` : '';
+  }
+}
+
+async function submitCopyAndEditKoleksi(sourceId, keepOpen = false) {
+  const src = window._copyKoleksiSourceItem || {};
+  const nominalVal = document.getElementById('ckNominal')?.value.trim() || null;
+  const certVal = document.getElementById('ckSertifikasi')?.value.trim() || null;
+  const hargaBeli = parseFloat(document.getElementById('ckHargaBeli')?.value || '0');
+  const ongkirVal = parseFloat(document.getElementById('ckOngkir')?.value || '0');
+  const catatanVal = document.getElementById('ckCatatan')?.value.trim() || null;
+  const groupIdVal = document.getElementById('ckGroupItem')?.value;
+  const groupId = groupIdVal ? parseInt(groupIdVal, 10) : null;
+  const copyPhotos = document.getElementById('ckCopyPhotos') ? document.getElementById('ckCopyPhotos').checked : false;
+
+  const namaItem = document.getElementById('ckNama')?.value.trim();
+  if (!namaItem) {
+    showToast('Nama item wajib diisi.', 'warning');
+    return;
+  }
+
+  const btnClose = document.getElementById('btnCopyKoleksiSaveClose');
+  const btnMore = document.getElementById('btnCopyKoleksiSaveMore');
+  if (btnClose) btnClose.disabled = true;
+  if (btnMore) btnMore.disabled = true;
+
+  const ctx = SmartPhotoManager.getContext('ck');
+  const hasNewObv = Boolean(ctx.obvFile);
+  const hasNewRev = Boolean(ctx.revFile);
+  const hasNewSup = Boolean(ctx.supportingQueue && ctx.supportingQueue.length > 0);
+
+  const payload = {
+    nama_item: namaItem,
+    nomor_seri: document.getElementById('ckNomorSeri')?.value.trim() || null,
+    group_id: groupId,
+    negara: document.getElementById('ckNegara')?.value.trim() || 'Indonesia',
+    tahun: document.getElementById('ckTahun')?.value.trim() || null,
+    nominal: nominalVal,
+    denominasi: nominalVal,
+    cetakan: src.cetakan || null,
+    jenis: document.getElementById('ckJenis')?.value,
+    grade: document.getElementById('ckGrade')?.value,
+    bahan: src.bahan || null,
+    warna_dominan: src.warna_dominan || null,
+    dimensi: src.dimensi || null,
+    kondisi_fisik: src.kondisi_fisik || null,
+    lokasi_simpan: src.lokasi_simpan || null,
+    sertifikasi: certVal,
+    detail: certVal,
+    qty: parseInt(document.getElementById('ckQty')?.value || '1', 10),
+    harga: hargaBeli,
+    harga_beli: hargaBeli,
+    ongkir: ongkirVal,
+    ongkir_alokasi: ongkirVal,
+    harga_jual: parseFloat(document.getElementById('ckHargaJual')?.value || '0'),
+    status_koleksi: document.getElementById('ckStatusKoleksi')?.value,
+    status: document.getElementById('ckStatus')?.value,
+    lembaga_grading: document.getElementById('ckLembagaGrading')?.value.trim() || '-',
+    nomor_sertifikasi: document.getElementById('ckNomorSertifikasi')?.value.trim() || null,
+    grade_numerik: document.getElementById('ckGradeNumerik')?.value.trim() || null,
+    grading_url: document.getElementById('ckGradingUrl')?.value.trim() || null,
+    supplier_id: src.supplier_id || null,
+    batch_id: src.batch_id || null,
+    lot_id: src.lot_id || null,
+    perolehan: src.perolehan || null,
+    link_pembelian: document.getElementById('ckLinkPembelian')?.value.trim() || null,
+    tanggal_beli: src.tanggal_beli ? src.tanggal_beli.split('T')[0] : null,
+    catatan_internal: catatanVal,
+    catatan: catatanVal,
+    foto_obv: (!hasNewObv && copyPhotos) ? (src.foto_obv || src.foto_path || null) : null,
+    foto_rev: (!hasNewRev && copyPhotos) ? (src.foto_rev || null) : null,
+    foto_path: (!hasNewObv && copyPhotos) ? (src.foto_obv || src.foto_path || null) : null,
+    copy_gallery_from_id: (!hasNewSup && copyPhotos) ? sourceId : null
+  };
+
+  try {
+    const res = await API.post('/koleksi', payload);
+    const newId = res.id || res.item_id;
+    if (newId) {
+      await SmartPhotoManager.uploadAllForKoleksi('ck', newId);
+    }
+    if (src.batch_id) {
+      await API.post(`/batch/${src.batch_id}/recalculate`, {}).catch(() => {});
+    }
+
+    if (document.getElementById('koleksiTableContainer')) {
+      loadKoleksi(koleksiCurrentPage);
+    }
+    if (typeof currentBatchId !== 'undefined' && currentBatchId && document.getElementById('batchRightPanel')) {
+      selectBatch(currentBatchId);
+    }
+
+    if (keepOpen) {
+      showToast('Salinan koleksi berhasil disimpan! Silakan edit untuk item berikutnya.', 'success');
+      if (btnClose) btnClose.disabled = false;
+      if (btnMore) btnMore.disabled = false;
+      const snEl = document.getElementById('ckNomorSeri');
+      if (snEl) {
+        snEl.focus();
+        snEl.select();
+      }
+    } else {
+      showToast('Item koleksi hasil Copy & Edit berhasil disimpan!', 'success');
+      closeModal();
+    }
+  } catch (err) {
+    showToast('Gagal menyimpan salinan item: ' + err.message, 'error');
+    if (btnClose) btnClose.disabled = false;
+    if (btnMore) btnMore.disabled = false;
   }
 }
 
@@ -1561,5 +1944,278 @@ function calcEditUnitHint() {
   if (hint) {
     const pcs = Math.round(harga / qty);
     hint.textContent = qty > 1 ? `@ Rp ${pcs.toLocaleString('id-ID')} / pcs` : '';
+  }
+}
+
+
+
+async function loadLotsIntoAdvFilter() {
+  const select = document.getElementById('advLotId');
+  if (!select) return;
+  try {
+    const res = await API.get('/koleksi/lots/list');
+    const lots = res.items || res.data || [];
+    let html = '<option value="">Semua Paket Lot</option>';
+    lots.forEach(l => {
+      html += `<option value="${l.id}">🎁 ${escapeHtml(l.kode_lot)} - ${escapeHtml(l.nama_lot)} (${l.item_count || 0} item)</option>`;
+    });
+    select.innerHTML = html;
+  } catch (err) {
+    console.error('Failed to load lots for filter:', err);
+  }
+}
+
+function filterByLotDirect(lotId) {
+  closeModal();
+  if (window.location.hash !== '#koleksi') {
+    window.location.hash = 'koleksi';
+    window.router.navigate('koleksi');
+  }
+  setTimeout(async () => {
+    if (!isAdvFilterOpen) toggleAdvancedFilter();
+    await loadLotsIntoAdvFilter();
+    const sel = document.getElementById('advLotId');
+    if (sel) {
+      sel.value = String(lotId);
+      loadKoleksi(1);
+    }
+  }, 150);
+}
+
+/**
+ * Modal Traceability & Evaluasi Balik Modal (ROI) Paket Lot Pembelian
+ */
+async function showLotTraceModal(lotId) {
+  try {
+    const data = await API.get(`/koleksi/lot/${lotId}`);
+    if (!data || !data.lot) throw new Error('Data Paket Lot tidak ditemukan');
+
+    const lot = data.lot;
+    const items = data.items || [];
+    const sum = data.summary || {};
+
+    const pctBalik = Math.min(100, Math.max(0, Number(sum.pct_balik_modal || 0)));
+    const isUntung = Boolean(sum.is_balik_modal);
+    const selisihVal = Number(sum.selisih_balik_modal || 0);
+
+    const body = `
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <!-- 1. Ringkasan Finansial & ROI / Balik Modal Lot -->
+        <div class="stat-cards-grid" style="grid-template-columns: repeat(4, 1fr); gap:10px;">
+          <div class="stat-card" style="padding:12px;">
+            <div class="stat-label" style="font-size:11px;">Harga Tebusan 1 Lot</div>
+            <div class="stat-value" style="font-size:1.15rem; color:var(--gold-light);">${formatRupiah(sum.harga_lot_total || 0)}</div>
+            <div style="font-size:10.5px; color:var(--text-muted); margin-top:2px;">${sum.total_items || 0} Jenis (${sum.total_pcs || 0} pcs)</div>
+          </div>
+          <div class="stat-card" style="padding:12px;">
+            <div class="stat-label" style="font-size:11px;">Total Modal HPP Lot</div>
+            <div class="stat-value" style="font-size:1.15rem; color:var(--text-primary);">${formatRupiah(sum.total_hpp_lot || 0)}</div>
+            <div style="font-size:10.5px; color:var(--text-muted); margin-top:2px;">Termasuk Ongkir ${formatRupiah(sum.total_ongkir_alokasi || 0)}</div>
+          </div>
+          <div class="stat-card" style="padding:12px;">
+            <div class="stat-label" style="font-size:11px;">Omzet Terjual dari Lot</div>
+            <div class="stat-value" style="font-size:1.15rem; color:var(--info);">${formatRupiah(sum.total_omzet_terjual || 0)}</div>
+            <div style="font-size:10.5px; color:var(--text-muted); margin-top:2px;">Terjual ${sum.total_pcs_terjual || 0} / ${sum.total_pcs || 0} pcs</div>
+          </div>
+          <div class="stat-card" style="padding:12px; border-color:${isUntung ? 'var(--success)' : 'var(--border-gold)'};">
+            <div class="stat-label" style="font-size:11px;">Status Balik Modal Lot</div>
+            <div class="stat-value" style="font-size:1.1rem; color:${isUntung ? 'var(--success)' : 'var(--warning)'};">
+              ${isUntung ? '+' + formatRupiah(selisihVal) : formatRupiah(selisihVal)}
+            </div>
+            <div style="font-size:10.5px; color:${isUntung ? 'var(--success)' : 'var(--text-secondary)'}; margin-top:2px; font-weight:600;">
+              ${isUntung ? '✅ Sudah Balik Modal & Untung!' : `⏳ Tercapai ${sum.pct_balik_modal || 0}% dari Modal Lot`}
+            </div>
+          </div>
+        </div>
+
+        <!-- Progress Bar Balik Modal -->
+        <div style="background:rgba(18,21,28,0.85); border:1px solid var(--border); border-radius:8px; padding:10px 14px;">
+          <div style="display:flex; justify-content:space-between; font-size:11.5px; margin-bottom:6px;">
+            <span style="color:var(--text-secondary);">Progress Pengembalian Modal 1 Lot (Break-Even Tracker)</span>
+            <strong style="color:${isUntung ? 'var(--success)' : 'var(--gold-light)'};">${sum.pct_balik_modal || 0}% (${formatRupiah(sum.total_omzet_terjual || 0)} / ${formatRupiah(sum.total_hpp_lot || 0)})</strong>
+          </div>
+          <div style="width:100%; height:8px; background:#0c0f16; border-radius:99px; overflow:hidden;">
+            <div style="width:${pctBalik}%; height:100%; background:${isUntung ? 'var(--success)' : 'linear-gradient(90deg, var(--gold-dark), var(--gold-light))'}; transition:width 0.3s ease;"></div>
+          </div>
+        </div>
+
+        <!-- 2. Form Edit Header Lot & Alokasi Harga Item -->
+        <div style="background:var(--bg-card); border:1px solid var(--border-gold); border-radius:10px; padding:14px 16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+            <div style="font-size:13px; font-weight:700; color:var(--gold-light);">
+              ⚙️ Identitas &amp; Pengaturan Harga Paket Lot (${escapeHtml(lot.kode_lot)})
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              ${lot.batch_id ? `<span class="badge" style="background:rgba(91,156,240,0.15); color:var(--info); font-size:11px;">📦 Bagian dari Batch: ${escapeHtml(lot.batch_kode || ('#' + lot.batch_id))}</span>` : `<span class="badge" style="background:rgba(212,175,55,0.12); color:var(--gold-light); font-size:11px;">🪙 Pembelian Single Lot</span>`}
+              ${lot.link_pembelian ? `<a href="${escapeHtml(lot.link_pembelian)}" target="_blank" rel="noopener noreferrer" style="font-size:11.5px; color:var(--info); text-decoration:underline;">🔗 Buka Link Pembelian ↗</a>` : ''}
+            </div>
+          </div>
+
+          <div class="data-grid-4" style="gap:10px;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" style="font-size:11px;">Nama / Judul Lot</label>
+              <input type="text" id="trace_lot_nama" class="form-control" value="${escapeHtml(lot.nama_lot || '')}">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" style="font-size:11px;">Harga Beli Gabungan 1 Lot (Rp)</label>
+              <div style="display:flex; gap:6px;">
+                <input type="number" id="trace_lot_harga" class="form-control" value="${lot.harga_lot_total || 0}" min="0">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="distributeTraceLotEqual(${lot.id})" title="Bagi rata ulang Harga Lot ke semua item berdasarkan Qty" style="white-space:nowrap; font-size:11px;">
+                  ⚡ Bagi Rata
+                </button>
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" style="font-size:11px;">🔗 Link Pembelian Lot</label>
+              <input type="text" id="trace_lot_link" class="form-control" value="${escapeHtml(lot.link_pembelian || '')}" placeholder="https://...">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" style="font-size:11px;">Catatan Lot</label>
+              <input type="text" id="trace_lot_catatan" class="form-control" value="${escapeHtml(lot.catatan || '')}">
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Tabel Daftar Seluruh Item dalam Lot Ini (Sibling Items) -->
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <h5 style="margin:0; font-size:13.5px; color:var(--text-primary);">
+              📋 Daftar Item yang Dibeli Bersama dalam Lot Ini (${items.length} Item)
+            </h5>
+            <span style="font-size:11px; color:var(--text-muted);">
+              Anda dapat menyesuaikan porsi alokasi harga beli per item di bawah lalu klik <strong>Simpan Perubahan Lot</strong>
+            </span>
+          </div>
+          <div class="table-wrapper table-compact" style="max-height:290px; overflow-y:auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>No</th>
+                  <th>Nama Item &amp; SN</th>
+                  <th style="text-align:center;">Grade</th>
+                  <th style="text-align:center;">Qty (Sisa/Total)</th>
+                  <th style="width:155px;">Alokasi Harga Beli (Rp)</th>
+                  <th>Ongkir</th>
+                  <th>HPP/pcs</th>
+                  <th>Omzet Terjual</th>
+                  <th style="text-align:center;">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${items.map((it, idx) => {
+                  const sisa = it.qty_tersisa !== undefined ? it.qty_tersisa : (it.qty - (it.qty_terjual || 0));
+                  return `
+                    <tr>
+                      <td>${idx + 1}</td>
+                      <td>
+                        <div style="font-weight:700; color:var(--text-primary); cursor:pointer;" onclick="closeModal(); showViewItemModal(${it.id})">
+                          ${escapeHtml(it.nama_item)}
+                        </div>
+                        <div style="font-size:10.5px; color:var(--text-muted); font-family:monospace;">
+                          ${escapeHtml(it.kode_item || '')} ${it.nomor_seri ? `• SN: ${escapeHtml(it.nomor_seri)}` : ''}
+                        </div>
+                      </td>
+                      <td style="text-align:center;">${formatGrade(it.grade)}</td>
+                      <td style="text-align:center; font-weight:700;" data-lot-item-qty="${it.qty || 1}">
+                        ${sisa} / ${it.qty || 1}
+                      </td>
+                      <td>
+                        <input type="number" class="form-control trace-lot-item-alloc" data-koleksi-id="${it.id}" data-qty="${it.qty || 1}" value="${it.harga || 0}" min="0" style="height:30px; font-size:12px; font-weight:700; color:var(--gold-light);">
+                      </td>
+                      <td style="font-size:12px; color:var(--text-secondary);">${formatRupiah(it.ongkir || 0)}</td>
+                      <td style="font-weight:700; color:var(--gold-primary);">${formatRupiah(it.hpp_per_pcs || 0)}</td>
+                      <td style="font-weight:600; color:${it.omzet_terjual > 0 ? 'var(--success)' : 'var(--text-muted)'};">
+                        ${it.omzet_terjual > 0 ? formatRupiah(it.omzet_terjual) : '-'}
+                      </td>
+                      <td style="text-align:center;">
+                        <div class="td-actions" style="justify-content:center;">
+                          <button type="button" class="btn btn-secondary btn-icon" onclick="closeModal(); showViewItemModal(${it.id})" title="Lihat Detail Item">👁️</button>
+                          <button type="button" class="btn btn-secondary btn-icon" onclick="closeModal(); showEditKoleksiModal(${it.id})" title="Edit Item">✏️</button>
+                        </div>
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const footer = `
+      <div style="display:flex; justify-content:space-between; width:100%; align-items:center; flex-wrap:wrap; gap:8px;">
+        <button type="button" class="btn btn-secondary" onclick="filterByLotDirect(${lot.id})">
+          🔍 Tampilkan Hanya Lot Ini di Tabel Koleksi
+        </button>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal()">Tutup</button>
+          <button type="button" class="btn btn-primary" onclick="submitUpdateLotTrace(${lot.id})">
+            💾 Simpan Perubahan &amp; Hitung Ulang HPP Lot
+          </button>
+        </div>
+      </div>
+    `;
+
+    openModal({
+      title: `🎁 Traceability Paket Lot: ${escapeHtml(lot.nama_lot)} (${escapeHtml(lot.kode_lot)})`,
+      body,
+      footer,
+      size: 'lg'
+    });
+  } catch (err) {
+    showToast('Gagal memuat detail Paket Lot: ' + err.message, 'error');
+  }
+}
+
+function distributeTraceLotEqual() {
+  const hargaLot = Math.max(0, parseFloat(document.getElementById('trace_lot_harga')?.value || '0'));
+  const inputs = Array.from(document.querySelectorAll('.trace-lot-item-alloc'));
+  if (!inputs.length) return;
+  const totalPcs = inputs.reduce((s, el) => s + Math.max(1, parseInt(el.dataset.qty || '1', 10)), 0);
+  let running = 0;
+  inputs.forEach((el, idx) => {
+    const qty = Math.max(1, parseInt(el.dataset.qty || '1', 10));
+    if (idx === inputs.length - 1) {
+      el.value = Math.max(0, Math.round(hargaLot - running));
+    } else {
+      const alloc = Math.round((hargaLot * qty) / Math.max(1, totalPcs));
+      el.value = alloc;
+      running += alloc;
+    }
+  });
+  showToast('Alokasi harga item dibagi rata sesuai Qty. Klik Simpan untuk menerapkan.', 'info', 1800);
+}
+
+async function submitUpdateLotTrace(lotId) {
+  const namaLot = document.getElementById('trace_lot_nama')?.value.trim();
+  const hargaLotTotal = parseFloat(document.getElementById('trace_lot_harga')?.value || '0');
+  const linkPembelian = document.getElementById('trace_lot_link')?.value.trim() || '';
+  const catatan = document.getElementById('trace_lot_catatan')?.value.trim() || '';
+
+  const inputs = Array.from(document.querySelectorAll('.trace-lot-item-alloc'));
+  const itemAllocations = inputs.map(el => ({
+    koleksi_id: parseInt(el.dataset.koleksiId, 10),
+    harga: Math.max(0, parseFloat(el.value || '0'))
+  }));
+
+  try {
+    await API.put(`/koleksi/lot/${lotId}`, {
+      nama_lot: namaLot,
+      harga_lot_total: hargaLotTotal,
+      link_pembelian: linkPembelian,
+      catatan: catatan,
+      item_allocations: itemAllocations
+    });
+    showToast('Data Paket Lot & HPP seluruh item berhasil diperbarui!', 'success');
+    await showLotTraceModal(lotId);
+    if (document.getElementById('koleksiTableContainer')) {
+      loadKoleksi(koleksiCurrentPage);
+    }
+    if (typeof currentBatchId !== 'undefined' && currentBatchId) {
+      selectBatch(currentBatchId);
+    }
+  } catch (err) {
+    showToast('Gagal memperbarui Paket Lot: ' + err.message, 'error');
   }
 }

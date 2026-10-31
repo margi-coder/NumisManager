@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import HTMLResponse
 import sqlite3
 from database.db import get_db
-from database.models import BatchCreate, BatchUpdate, BatchResponse
+from database.models import BatchCreate, BatchUpdate, BatchResponse, BatchCopyRequest, BatchBulkDeleteRequest, BatchItemsBulkDeleteRequest
 from utils.auth_utils import get_current_user, get_optional_user
 from utils.calculations import calculate_hpp_batch
 
@@ -185,11 +185,14 @@ def get_batch_detail(
         SELECT k.id, k.kode_item, k.nama_item, k.nomor_seri, k.tahun, k.denominasi, k.grade, k.jenis, k.negara,
                k.status, COALESCE(k.is_checked, 0) as is_checked, k.qty, k.qty_terjual, (k.qty - k.qty_terjual) as qty_tersisa,
                k.harga, k.ongkir, k.hpp, k.hpp_per_pcs, k.harga_jual, k.status_koleksi, k.foto_path, k.foto_obv, k.foto_rev,
-               k.tanggal_beli, k.detail, k.catatan_internal, k.kondisi_fisik, k.lokasi_simpan,
+               k.tanggal_beli, k.link_pembelian, k.detail, k.catatan_internal, k.kondisi_fisik, k.lokasi_simpan,
                k.lembaga_grading, k.nomor_sertifikasi, k.grade_numerik,
-               k.group_id, g.nama_group as group_nama
+               k.group_id, g.nama_group as group_nama,
+               k.lot_id, l.kode_lot as lot_kode, l.nama_lot as lot_nama, l.harga_lot_total as lot_harga_total,
+               (SELECT COUNT(*) FROM koleksi k2 WHERE k2.lot_id = k.lot_id) as lot_item_count
         FROM koleksi k
         LEFT JOIN group_item g ON k.group_id = g.id
+        LEFT JOIN lot_pembelian l ON k.lot_id = l.id
         WHERE k.batch_id = ?
         ORDER BY k.id ASC
         """,
@@ -298,6 +301,240 @@ def update_batch(
     updated_batch = dict(cursor.fetchone())
     return updated_batch
 
+@router.post("/{batch_id}/copy")
+def copy_batch(
+    batch_id: int,
+    payload: BatchCopyRequest,
+    conn: sqlite3.Connection = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Menduplikasi / menyalin batch pembelian beserta opsi untuk menyalin seluruh item koleksi dan lot di dalamnya.
+    Mendukung penyesuaian nama batch baru, tanggal beli, supplier, ongkir, serta opsi salin foto dan reset checklist.
+    """
+    from routers.koleksi import generate_kode_item, generate_kode_lot, ensure_lot_schema
+
+    ensure_lot_schema(conn)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM batch_pembelian WHERE id = ?", (batch_id,))
+    source_batch = cursor.fetchone()
+    if not source_batch:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Batch pembelian asal tidak ditemukan"
+        )
+
+    kode_batch = generate_kode_batch(conn)
+    nama_batch = (payload.nama_batch or "").strip()
+    if not nama_batch:
+        src_name = source_batch["nama_batch"] or source_batch["kode_batch"] or f"Batch #{batch_id}"
+        nama_batch = f"[Salinan] {src_name}"
+
+    supplier_id = payload.supplier_id if payload.supplier_id is not None else source_batch["supplier_id"]
+    if supplier_id:
+        cursor.execute("SELECT id FROM supplier WHERE id = ?", (supplier_id,))
+        if not cursor.fetchone():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Supplier yang dipilih tidak ditemukan"
+            )
+
+    total_ongkir = float(payload.total_ongkir) if payload.total_ongkir is not None else float(source_batch["total_ongkir"] or 0.0)
+    perolehan = payload.perolehan if payload.perolehan is not None else source_batch["perolehan"]
+    link_pembelian = payload.link_pembelian if payload.link_pembelian is not None else source_batch["link_pembelian"]
+    tanggal_beli = payload.tanggal_beli if payload.tanggal_beli is not None else (source_batch["tanggal_beli"] or datetime.now().strftime("%Y-%m-%d"))
+    status_batch = payload.status if payload.status is not None else (source_batch["status"] or "pesan")
+    catatan = payload.catatan if payload.catatan is not None else source_batch["catatan"]
+
+    cursor.execute(
+        """
+        INSERT INTO batch_pembelian (
+            kode_batch, nama_batch, supplier_id, total_ongkir, perolehan,
+            link_pembelian, tanggal_beli, status, is_final_ok, catatan, created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+        """,
+        (
+            kode_batch,
+            nama_batch,
+            supplier_id,
+            total_ongkir,
+            perolehan,
+            link_pembelian,
+            tanggal_beli,
+            status_batch,
+            catatan,
+            current_user["id"]
+        )
+    )
+    new_batch_id = cursor.lastrowid
+
+    items_copied_count = 0
+    if payload.copy_items:
+        cursor.execute("SELECT * FROM koleksi WHERE batch_id = ? ORDER BY id ASC", (batch_id,))
+        source_items = cursor.fetchall()
+
+        # Duplikasi paket lot jika ada item yang tergabung dalam lot
+        distinct_lot_ids = list(dict.fromkeys([it["lot_id"] for it in source_items if it["lot_id"] is not None]))
+        old_lot_to_new_lot = {}
+
+        for old_lot_id in distinct_lot_ids:
+            cursor.execute("SELECT * FROM lot_pembelian WHERE id = ?", (old_lot_id,))
+            src_lot = cursor.fetchone()
+            if src_lot:
+                new_kode_lot = generate_kode_lot(conn)
+                src_lot_nama = src_lot["nama_lot"] or f"Lot {src_lot['kode_lot']}"
+                cursor.execute(
+                    """
+                    INSERT INTO lot_pembelian (
+                        kode_lot, nama_lot, harga_lot_total, ongkir_lot, metode_alokasi,
+                        batch_id, supplier_id, perolehan, link_pembelian, tanggal_beli,
+                        status, catatan, created_by
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        new_kode_lot,
+                        src_lot_nama,
+                        src_lot["harga_lot_total"],
+                        src_lot["ongkir_lot"],
+                        src_lot["metode_alokasi"],
+                        new_batch_id,
+                        src_lot["supplier_id"] if src_lot["supplier_id"] is not None else supplier_id,
+                        src_lot["perolehan"] if src_lot["perolehan"] else perolehan,
+                        src_lot["link_pembelian"] if src_lot["link_pembelian"] else link_pembelian,
+                        src_lot["tanggal_beli"] if src_lot["tanggal_beli"] else tanggal_beli,
+                        status_batch,
+                        src_lot["catatan"] if src_lot["catatan"] else catatan,
+                        current_user["id"]
+                    )
+                )
+                old_lot_to_new_lot[old_lot_id] = cursor.lastrowid
+
+        created_item_ids = []
+        for it in source_items:
+            new_kode_item = generate_kode_item(conn)
+            new_lot_id = old_lot_to_new_lot.get(it["lot_id"]) if it["lot_id"] else None
+
+            if payload.copy_photos:
+                foto_path = it["foto_path"]
+                foto_obv = it["foto_obv"]
+                foto_rev = it["foto_rev"]
+                foto_detail = it["foto_detail"]
+            else:
+                foto_path, foto_obv, foto_rev, foto_detail = None, None, None, None
+
+            is_checked = 0 if payload.reset_checklist else (it["is_checked"] or 0)
+            item_status = status_batch
+
+            # Pertahankan seluruh atribut spesifik item asal
+            item_tgl = it["tanggal_beli"] if it["tanggal_beli"] else tanggal_beli
+            item_link = it["link_pembelian"] if it["link_pembelian"] else link_pembelian
+            item_supplier = it["supplier_id"] if it["supplier_id"] is not None else supplier_id
+            item_perolehan = it["perolehan"] if it["perolehan"] else perolehan
+
+            cursor.execute(
+                """
+                INSERT INTO koleksi (
+                    kode_item, nama_item, nomor_seri, tahun, denominasi, cetakan, grade, jenis, negara,
+                    bahan, warna_dominan, dimensi, kondisi_fisik, lokasi_simpan, detail, catatan_internal,
+                    foto_path, foto_obv, foto_rev, foto_detail,
+                    lembaga_grading, nomor_sertifikasi, grade_numerik, grading_url,
+                    supplier_id, batch_id, lot_id, group_id, perolehan, link_pembelian, tanggal_beli,
+                    status, is_checked, qty, qty_terjual, harga, ongkir, hpp, hpp_per_pcs,
+                    harga_jual, status_koleksi, is_pecahan, parent_id, created_by
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?,
+                    ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, 0, ?, ?, ?, ?,
+                    ?, ?, 0, NULL, ?
+                )
+                """,
+                (
+                    new_kode_item,
+                    it["nama_item"],
+                    it["nomor_seri"],
+                    it["tahun"],
+                    it["denominasi"],
+                    it["cetakan"],
+                    it["grade"],
+                    it["jenis"],
+                    it["negara"],
+                    it["bahan"],
+                    it["warna_dominan"],
+                    it["dimensi"],
+                    it["kondisi_fisik"],
+                    it["lokasi_simpan"],
+                    it["detail"],
+                    it["catatan_internal"],
+                    foto_path,
+                    foto_obv,
+                    foto_rev,
+                    foto_detail,
+                    it["lembaga_grading"],
+                    it["nomor_sertifikasi"],
+                    it["grade_numerik"],
+                    it["grading_url"],
+                    item_supplier,
+                    new_batch_id,
+                    new_lot_id,
+                    it["group_id"],
+                    item_perolehan,
+                    item_link,
+                    item_tgl,
+                    item_status,
+                    is_checked,
+                    it["qty"] or 1,
+                    it["harga"] or 0.0,
+                    it["ongkir"] or 0.0,
+                    it["hpp"] or 0.0,
+                    it["hpp_per_pcs"] or 0.0,
+                    it["harga_jual"] or 0.0,
+                    it["status_koleksi"] or "stock_jual",
+                    current_user["id"]
+                )
+            )
+            new_item_id = cursor.lastrowid
+            created_item_ids.append(new_item_id)
+
+            if payload.copy_photos:
+                cursor.execute(
+                    "SELECT foto_path, label, catatan FROM koleksi_foto WHERE koleksi_id = ? ORDER BY id ASC",
+                    (it["id"],)
+                )
+                src_gallery = cursor.fetchall()
+                for sg in src_gallery:
+                    cursor.execute(
+                        "INSERT INTO koleksi_foto (koleksi_id, foto_path, label, catatan) VALUES (?, ?, ?, ?)",
+                        (new_item_id, sg["foto_path"], sg["label"], sg["catatan"])
+                    )
+
+        # Hitung ulang alokasi HPP batch baru secara proporsional rata
+        if created_item_ids:
+            cursor.execute("SELECT id, harga, qty FROM koleksi WHERE batch_id = ? ORDER BY id ASC", (new_batch_id,))
+            recalc_items = [dict(r) for r in cursor.fetchall()]
+            recalculated = calculate_hpp_batch(recalc_items, total_ongkir)
+            for r_it in recalculated:
+                cursor.execute(
+                    "UPDATE koleksi SET ongkir = ?, hpp = ?, hpp_per_pcs = ? WHERE id = ?",
+                    (r_it["ongkir"], r_it["hpp"], r_it["hpp_per_pcs"], r_it["id"])
+                )
+
+        items_copied_count = len(created_item_ids)
+
+    conn.commit()
+
+    return {
+        "success": True,
+        "new_batch_id": new_batch_id,
+        "kode_batch": kode_batch,
+        "nama_batch": nama_batch,
+        "items_copied": items_copied_count,
+        "message": f"Batch '{nama_batch}' ({kode_batch}) berhasil diduplikat!"
+    }
+
+
 @router.delete("/{batch_id}")
 def delete_batch(
     batch_id: int,
@@ -377,6 +614,153 @@ def delete_batch(
     return {
         "message": f"Batch '{batch_name}' beserta {deleted_count} item koleksi/stok dan slot album digital berhasil dihapus.",
         "deleted_items_count": deleted_count
+    }
+
+
+@router.post("/bulk-delete")
+def bulk_delete_batches(
+    payload: BatchBulkDeleteRequest,
+    conn: sqlite3.Connection = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Menghapus beberapa batch pembelian sekaligus secara permanen beserta seluruh item,
+    slot album, galeri foto, transaksi penjualan, dan lot terkait.
+    """
+    if not payload.batch_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Daftar ID batch tidak boleh kosong"
+        )
+
+    cursor = conn.cursor()
+    placeholders = ",".join("?" for _ in payload.batch_ids)
+
+    # 1. Ambil semua batch yang ada
+    cursor.execute(f"SELECT id, nama_batch FROM batch_pembelian WHERE id IN ({placeholders})", tuple(payload.batch_ids))
+    batches = cursor.fetchall()
+    if not batches:
+        return {"success": True, "deleted_count": 0, "message": "Tidak ada batch yang cocok untuk dihapus."}
+
+    valid_batch_ids = [b["id"] for b in batches]
+    valid_placeholders = ",".join("?" for _ in valid_batch_ids)
+
+    # 2. Ambil semua item dalam batch-batch ini
+    cursor.execute(f"SELECT id FROM koleksi WHERE batch_id IN ({valid_placeholders})", tuple(valid_batch_ids))
+    item_ids = [row["id"] for row in cursor.fetchall()]
+
+    # 3. Item pecahan stok turunan
+    child_item_ids = []
+    if item_ids:
+        placeholders_parent = ",".join("?" for _ in item_ids)
+        cursor.execute(
+            f"SELECT id FROM koleksi WHERE parent_id IN ({placeholders_parent})",
+            tuple(item_ids)
+        )
+        child_item_ids = [row["id"] for row in cursor.fetchall()]
+
+    all_item_ids = list(set(item_ids + child_item_ids))
+    if all_item_ids:
+        placeholders_all = ",".join("?" for _ in all_item_ids)
+        cursor.execute(f"DELETE FROM album_item WHERE koleksi_id IN ({placeholders_all})", tuple(all_item_ids))
+        cursor.execute(f"DELETE FROM koleksi_foto WHERE koleksi_id IN ({placeholders_all})", tuple(all_item_ids))
+        cursor.execute(f"DELETE FROM penjualan WHERE koleksi_id IN ({placeholders_all})", tuple(all_item_ids))
+        if child_item_ids:
+            placeholders_child = ",".join("?" for _ in child_item_ids)
+            cursor.execute(f"DELETE FROM koleksi WHERE id IN ({placeholders_child})", tuple(child_item_ids))
+        cursor.execute(f"DELETE FROM koleksi WHERE batch_id IN ({valid_placeholders})", tuple(valid_batch_ids))
+
+    # 4. Hapus paket lot pembelian terkait batch-batch ini
+    cursor.execute(f"DELETE FROM lot_pembelian WHERE batch_id IN ({valid_placeholders})", tuple(valid_batch_ids))
+
+    # 5. Hapus header batch_pembelian
+    cursor.execute(f"DELETE FROM batch_pembelian WHERE id IN ({valid_placeholders})", tuple(valid_batch_ids))
+
+    conn.commit()
+
+    return {
+        "success": True,
+        "deleted_batch_count": len(valid_batch_ids),
+        "deleted_items_count": len(all_item_ids),
+        "message": f"Berhasil menghapus {len(valid_batch_ids)} batch dan {len(all_item_ids)} item terkait."
+    }
+
+
+@router.post("/{batch_id}/items/bulk-delete")
+def bulk_delete_batch_items(
+    batch_id: int,
+    payload: BatchItemsBulkDeleteRequest,
+    conn: sqlite3.Connection = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Menghapus beberapa item di dalam suatu batch sekaligus secara permanen,
+    dan otomatis menghitung ulang alokasi HPP item tersisa di batch tersebut.
+    """
+    if not payload.item_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Daftar ID item tidak boleh kosong"
+        )
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, total_ongkir FROM batch_pembelian WHERE id = ?", (batch_id,))
+    batch = cursor.fetchone()
+    if not batch:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Batch pembelian tidak ditemukan"
+        )
+
+    placeholders = ",".join("?" for _ in payload.item_ids)
+    cursor.execute(
+        f"SELECT id FROM koleksi WHERE id IN ({placeholders}) AND batch_id = ?",
+        tuple(payload.item_ids + [batch_id])
+    )
+    valid_items = cursor.fetchall()
+    if not valid_items:
+        return {"success": True, "deleted_count": 0, "message": "Tidak ada item yang cocok untuk dihapus."}
+
+    valid_item_ids = [it["id"] for it in valid_items]
+
+    # Child item ids
+    placeholders_parent = ",".join("?" for _ in valid_item_ids)
+    cursor.execute(
+        f"SELECT id FROM koleksi WHERE parent_id IN ({placeholders_parent})",
+        tuple(valid_item_ids)
+    )
+    child_item_ids = [row["id"] for row in cursor.fetchall()]
+
+    all_ids_to_del = list(set(valid_item_ids + child_item_ids))
+    placeholders_all = ",".join("?" for _ in all_ids_to_del)
+
+    cursor.execute(f"DELETE FROM album_item WHERE koleksi_id IN ({placeholders_all})", tuple(all_ids_to_del))
+    cursor.execute(f"DELETE FROM koleksi_foto WHERE koleksi_id IN ({placeholders_all})", tuple(all_ids_to_del))
+    cursor.execute(f"DELETE FROM penjualan WHERE koleksi_id IN ({placeholders_all})", tuple(all_ids_to_del))
+    if child_item_ids:
+        placeholders_child = ",".join("?" for _ in child_item_ids)
+        cursor.execute(f"DELETE FROM koleksi WHERE id IN ({placeholders_child})", tuple(child_item_ids))
+    cursor.execute(f"DELETE FROM koleksi WHERE id IN ({placeholders_parent})", tuple(valid_item_ids))
+
+    conn.commit()
+
+    # Hitung ulang HPP item yang tersisa di batch
+    cursor.execute("SELECT id, harga, qty FROM koleksi WHERE batch_id = ? ORDER BY id ASC", (batch_id,))
+    remaining_items = [dict(r) for r in cursor.fetchall()]
+    if remaining_items:
+        recalculated = calculate_hpp_batch(remaining_items, float(batch["total_ongkir"] or 0.0))
+        for r_it in recalculated:
+            cursor.execute(
+                "UPDATE koleksi SET ongkir = ?, hpp = ?, hpp_per_pcs = ? WHERE id = ?",
+                (r_it["ongkir"], r_it["hpp"], r_it["hpp_per_pcs"], r_it["id"])
+            )
+        conn.commit()
+
+    return {
+        "success": True,
+        "deleted_count": len(valid_item_ids),
+        "remaining_count": len(remaining_items),
+        "message": f"Berhasil menghapus {len(valid_item_ids)} item dari batch."
     }
 
 @router.post("/{batch_id}/recalculate")

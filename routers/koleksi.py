@@ -14,7 +14,9 @@ from database.models import (
     KoleksiCreate,
     KoleksiUpdate,
     PecahStokRequest,
-    KoleksiResponse
+    KoleksiResponse,
+    LotCreateRequest,
+    LotUpdateRequest
 )
 from utils.auth_utils import get_current_user
 from utils.calculations import calculate_hpp_single
@@ -42,6 +44,53 @@ def generate_kode_item(conn: sqlite3.Connection) -> str:
 
 STATIC_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
+def ensure_lot_schema(conn: sqlite3.Connection):
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS lot_pembelian (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kode_lot TEXT UNIQUE NOT NULL,
+            nama_lot TEXT NOT NULL,
+            harga_lot_total REAL DEFAULT 0,
+            ongkir_lot REAL DEFAULT 0,
+            metode_alokasi TEXT DEFAULT 'proporsional_qty',
+            batch_id INTEGER REFERENCES batch_pembelian(id) ON DELETE SET NULL,
+            supplier_id INTEGER REFERENCES supplier(id),
+            perolehan TEXT,
+            link_pembelian TEXT,
+            tanggal_beli TEXT,
+            status TEXT DEFAULT 'pesan',
+            catatan TEXT,
+            created_by INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT (datetime('now','localtime')),
+            updated_at TEXT DEFAULT (datetime('now','localtime'))
+        )
+        """
+    )
+    cursor.execute("PRAGMA table_info(koleksi)")
+    cols = [row["name"] for row in cursor.fetchall()]
+    if "lot_id" not in cols:
+        cursor.execute("ALTER TABLE koleksi ADD COLUMN lot_id INTEGER REFERENCES lot_pembelian(id) ON DELETE SET NULL")
+        conn.commit()
+
+def generate_kode_lot(conn: sqlite3.Connection) -> str:
+    today_str = datetime.now().strftime("%Y%m%d")
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT COUNT(*) as cnt FROM lot_pembelian WHERE kode_lot LIKE ?",
+        (f"LOT-{today_str}-%",)
+    )
+    count = cursor.fetchone()["cnt"]
+    seq = count + 1
+    while True:
+        kode = f"LOT-{today_str}-{seq:03d}"
+        cursor.execute("SELECT id FROM lot_pembelian WHERE kode_lot = ?", (kode,))
+        if not cursor.fetchone():
+            return kode
+        seq += 1
+
+
 @router.get("/")
 def list_koleksi(
     page: int = Query(1, ge=1, description="Halaman"),
@@ -53,6 +102,7 @@ def list_koleksi(
     status: Optional[str] = Query(None, description="Filter status pengiriman/pesanan (pesan, dikirim, diterima)"),
     negara: Optional[str] = Query(None, description="Filter negara asal"),
     batch_id: Optional[int] = Query(None, description="Filter berdasarkan ID batch"),
+    lot_id: Optional[int] = Query(None, description="Filter berdasarkan ID paket lot"),
     hpp_min: Optional[float] = Query(None, description="Filter batas bawah HPP/pcs"),
     hpp_max: Optional[float] = Query(None, description="Filter batas atas HPP/pcs"),
     tahun_dari: Optional[str] = Query(None, description="Filter tahun mulai"),
@@ -65,6 +115,7 @@ def list_koleksi(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Mendapatkan daftar koleksi numismatik dengan beragam filter dan paginasi."""
+    ensure_lot_schema(conn)
     cursor = conn.cursor()
     where_clauses = []
     params = []
@@ -93,6 +144,9 @@ def list_koleksi(
     if batch_id is not None:
         where_clauses.append("k.batch_id = ?")
         params.append(batch_id)
+    if lot_id is not None:
+        where_clauses.append("k.lot_id = ?")
+        params.append(lot_id)
     if group_id is not None:
         where_clauses.append("k.group_id = ?")
         params.append(group_id)
@@ -130,11 +184,16 @@ def list_koleksi(
         SELECT k.*, (k.qty - k.qty_terjual) as qty_tersisa,
                s.nama as supplier_nama,
                b.kode_batch as batch_kode,
-               g.nama_group as group_nama
+               g.nama_group as group_nama,
+               l.kode_lot as lot_kode,
+               l.nama_lot as lot_nama,
+               l.harga_lot_total as lot_harga_total,
+               (SELECT COUNT(*) FROM koleksi k2 WHERE k2.lot_id = k.lot_id) as lot_item_count
         FROM koleksi k
         LEFT JOIN supplier s ON k.supplier_id = s.id
         LEFT JOIN batch_pembelian b ON k.batch_id = b.id
         LEFT JOIN group_item g ON k.group_id = g.id
+        LEFT JOIN lot_pembelian l ON k.lot_id = l.id
         {where_sql}
         ORDER BY k.id DESC
         LIMIT ? OFFSET ?
@@ -199,7 +258,7 @@ def create_koleksi(
             bahan, warna_dominan, dimensi, kondisi_fisik, lokasi_simpan, detail,
             catatan_internal, foto_path, foto_obv, foto_rev, foto_detail,
             lembaga_grading, nomor_sertifikasi, grade_numerik, grading_url,
-            supplier_id, batch_id, group_id, perolehan, link_pembelian, tanggal_beli, status,
+            supplier_id, batch_id, lot_id, group_id, perolehan, link_pembelian, tanggal_beli, status,
             qty, qty_terjual, harga, ongkir, hpp, hpp_per_pcs, harga_jual, status_koleksi,
             is_pecahan, parent_id, created_by
         ) VALUES (
@@ -207,7 +266,7 @@ def create_koleksi(
             ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
             ?, ?, ?, ?,
-            ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?, ?, ?,
             ?, 0, ?, ?, ?, ?, ?, ?,
             0, NULL, ?
         )
@@ -219,7 +278,7 @@ def create_koleksi(
             payload.lokasi_simpan, payload.detail, payload.catatan_internal,
             foto_path, foto_obv, foto_rev, foto_detail,
             lembaga_grading, nomor_sertifikasi, grade_numerik, grading_url,
-            payload.supplier_id, payload.batch_id, payload.group_id, payload.perolehan, payload.link_pembelian,
+            payload.supplier_id, payload.batch_id, payload.lot_id, payload.group_id, payload.perolehan, payload.link_pembelian,
             tanggal_beli, payload.status or "pesan", qty, payload.harga, payload.ongkir,
             hpp, hpp_per_pcs, payload.harga_jual, payload.status_koleksi or "stock_jual",
             current_user["id"]
@@ -228,22 +287,429 @@ def create_koleksi(
     conn.commit()
     new_id = cursor.lastrowid
 
+    if payload.copy_gallery_from_id:
+        cursor.execute(
+            "SELECT foto_path, label, catatan FROM koleksi_foto WHERE koleksi_id = ? ORDER BY id ASC",
+            (payload.copy_gallery_from_id,)
+        )
+        src_fotos = cursor.fetchall()
+        for sf in src_fotos:
+            cursor.execute(
+                "INSERT INTO koleksi_foto (koleksi_id, foto_path, label, catatan) VALUES (?, ?, ?, ?)",
+                (new_id, sf["foto_path"], sf["label"], sf["catatan"])
+            )
+        if src_fotos:
+            conn.commit()
+
     cursor.execute(
         """
         SELECT k.*, (k.qty - k.qty_terjual) as qty_tersisa,
                s.nama as supplier_nama,
                b.kode_batch as batch_kode,
-               g.nama_group as group_nama
+               g.nama_group as group_nama,
+               l.kode_lot as lot_kode,
+               l.nama_lot as lot_nama,
+               l.harga_lot_total as lot_harga_total,
+               (SELECT COUNT(*) FROM koleksi k2 WHERE k2.lot_id = k.lot_id) as lot_item_count
         FROM koleksi k
         LEFT JOIN supplier s ON k.supplier_id = s.id
         LEFT JOIN batch_pembelian b ON k.batch_id = b.id
         LEFT JOIN group_item g ON k.group_id = g.id
+        LEFT JOIN lot_pembelian l ON k.lot_id = l.id
         WHERE k.id = ?
         """,
         (new_id,)
     )
     created_item = dict(cursor.fetchone())
     return created_item
+
+
+@router.get("/lots/list")
+def list_lots(
+    batch_id: Optional[int] = Query(None),
+    conn: sqlite3.Connection = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Mendapatkan daftar seluruh Paket Lot Pembelian untuk filter dan pelacakan."""
+    ensure_lot_schema(conn)
+    cursor = conn.cursor()
+    where_sql = "WHERE l.batch_id = ?" if batch_id is not None else ""
+    params = (batch_id,) if batch_id is not None else ()
+    cursor.execute(
+        f"""
+        SELECT l.*,
+               b.kode_batch as batch_kode, b.nama_batch as batch_nama,
+               s.nama as supplier_nama,
+               COUNT(k.id) as item_count,
+               COALESCE(SUM(k.qty), 0) as total_pcs
+        FROM lot_pembelian l
+        LEFT JOIN batch_pembelian b ON l.batch_id = b.id
+        LEFT JOIN supplier s ON l.supplier_id = s.id
+        LEFT JOIN koleksi k ON l.id = k.lot_id
+        {where_sql}
+        GROUP BY l.id
+        ORDER BY l.id DESC
+        """,
+        params
+    )
+    lots = [dict(r) for r in cursor.fetchall()]
+    return {"items": lots, "data": lots}
+
+
+@router.post("/lot")
+def create_lot_pembelian(
+    payload: LotCreateRequest,
+    conn: sqlite3.Connection = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Membuat Paket Lot (1 harga gabungan untuk beberapa item) pada Pembelian Single maupun Batch."""
+    ensure_lot_schema(conn)
+    if not payload.items or len(payload.items) == 0:
+        raise HTTPException(status_code=400, detail="Paket Lot harus memiliki minimal 1 item.")
+
+    cursor = conn.cursor()
+    kode_lot = generate_kode_lot(conn)
+    tanggal_beli = payload.tanggal_beli or datetime.now().strftime("%Y-%m-%d")
+
+    # Jika di dalam batch, ambil info default dari batch jika belum diisi
+    supplier_id = payload.supplier_id
+    perolehan = payload.perolehan
+    status_pengiriman = payload.status or "terima"
+    link_pembelian = payload.link_pembelian
+
+    if payload.batch_id:
+        cursor.execute("SELECT * FROM batch_pembelian WHERE id = ?", (payload.batch_id,))
+        batch_row = cursor.fetchone()
+        if not batch_row:
+            raise HTTPException(status_code=404, detail="Batch pembelian tidak ditemukan")
+        if not supplier_id:
+            supplier_id = batch_row["supplier_id"]
+        if not perolehan:
+            perolehan = batch_row["perolehan"]
+        if not payload.status:
+            status_pengiriman = batch_row["status"]
+        if not link_pembelian:
+            link_pembelian = batch_row["link_pembelian"]
+        if not payload.tanggal_beli and batch_row["tanggal_beli"]:
+            tanggal_beli = batch_row["tanggal_beli"]
+
+    cursor.execute(
+        """
+        INSERT INTO lot_pembelian (
+            kode_lot, nama_lot, harga_lot_total, ongkir_lot, metode_alokasi,
+            batch_id, supplier_id, perolehan, link_pembelian, tanggal_beli,
+            status, catatan, created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            kode_lot,
+            payload.nama_lot.strip(),
+            payload.harga_lot_total,
+            payload.ongkir_lot,
+            payload.metode_alokasi or "proporsional_qty",
+            payload.batch_id,
+            supplier_id,
+            perolehan,
+            link_pembelian,
+            tanggal_beli,
+            status_pengiriman,
+            payload.catatan,
+            current_user["id"]
+        )
+    )
+    lot_id = cursor.lastrowid
+
+    # Hitung alokasi harga per item dan ongkir lot (jika Single Lot)
+    n_items = len(payload.items)
+    total_pcs = sum(max(1, it.qty) for it in payload.items)
+    harga_lot = max(0.0, float(payload.harga_lot_total or 0.0))
+    ongkir_lot = max(0.0, float(payload.ongkir_lot or 0.0)) if not payload.batch_id else 0.0
+
+    # Cek apakah item sudah memiliki harga_alokasi dari frontend
+    provided_allocs = [it.harga_alokasi for it in payload.items]
+    use_provided = all(a is not None and a >= 0 for a in provided_allocs)
+
+    allocated_prices = []
+    if use_provided:
+        allocated_prices = [round(float(a), 2) for a in provided_allocs]
+    else:
+        running_sum = 0.0
+        for idx, it in enumerate(payload.items):
+            if idx == n_items - 1:
+                alloc = max(0.0, round(harga_lot - running_sum, 2))
+            else:
+                if payload.metode_alokasi == "bagi_rata_item":
+                    alloc = round(harga_lot / n_items, 2)
+                else:
+                    qty_it = max(1, it.qty)
+                    alloc = round((harga_lot * qty_it) / max(1, total_pcs), 2)
+                running_sum += alloc
+            allocated_prices.append(alloc)
+
+    # Alokasi ongkir lot untuk Single Purchase
+    allocated_ongkir = []
+    running_ongkir = 0.0
+    for idx, it in enumerate(payload.items):
+        if ongkir_lot <= 0:
+            allocated_ongkir.append(0.0)
+        elif idx == n_items - 1:
+            allocated_ongkir.append(max(0.0, round(ongkir_lot - running_ongkir, 2)))
+        else:
+            qty_it = max(1, it.qty)
+            o_alloc = round((ongkir_lot * qty_it) / max(1, total_pcs), 2)
+            running_ongkir += o_alloc
+            allocated_ongkir.append(o_alloc)
+
+    created_items = []
+    for idx, it in enumerate(payload.items):
+        qty = max(1, it.qty)
+        item_harga = allocated_prices[idx]
+        item_ongkir = allocated_ongkir[idx]
+        hpp_calc = calculate_hpp_single(item_harga, item_ongkir, qty)
+        kode_item = generate_kode_item(conn)
+        denom = it.denominasi or it.nominal
+        detail_val = it.detail or it.catatan_internal
+
+        cursor.execute(
+            """
+            INSERT INTO koleksi (
+                kode_item, nama_item, nomor_seri, tahun, denominasi, grade, jenis, negara,
+                detail, catatan_internal, lembaga_grading, nomor_sertifikasi, grade_numerik, grading_url,
+                supplier_id, batch_id, lot_id, group_id, perolehan, link_pembelian, tanggal_beli, status,
+                qty, qty_terjual, harga, ongkir, hpp, hpp_per_pcs, harga_jual, status_koleksi,
+                is_pecahan, parent_id, created_by
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, 0, ?, ?, ?, ?, ?, ?,
+                0, NULL, ?
+            )
+            """,
+            (
+                kode_item,
+                it.nama_item.strip(),
+                it.nomor_seri,
+                it.tahun,
+                denom,
+                it.grade or "UNC",
+                it.jenis or "uang_kertas",
+                it.negara or "Indonesia",
+                detail_val,
+                detail_val,
+                it.lembaga_grading or "-",
+                it.nomor_sertifikasi,
+                it.grade_numerik,
+                it.grading_url,
+                supplier_id,
+                payload.batch_id,
+                lot_id,
+                it.group_id if (it.group_id and it.group_id > 0) else None,
+                perolehan,
+                it.link_pembelian if it.link_pembelian else link_pembelian,
+                it.tanggal_beli if it.tanggal_beli else tanggal_beli,
+                status_pengiriman,
+                qty,
+                item_harga,
+                item_ongkir,
+                hpp_calc["hpp"],
+                hpp_calc["hpp_per_pcs"],
+                it.harga_jual or 0.0,
+                payload.status_koleksi or "stock_jual",
+                current_user["id"]
+            )
+        )
+        new_item_id = cursor.lastrowid
+        created_items.append({"id": new_item_id, "kode_item": kode_item, "nama_item": it.nama_item})
+
+    conn.commit()
+
+    # Jika bagian dari Batch, hitung ulang alokasi ongkir Batch secara proporsional/rata
+    if payload.batch_id:
+        from utils.calculations import calculate_hpp_batch
+        cursor.execute("SELECT total_ongkir FROM batch_pembelian WHERE id = ?", (payload.batch_id,))
+        b_row = cursor.fetchone()
+        if b_row:
+            cursor.execute("SELECT id, harga, qty FROM koleksi WHERE batch_id = ? ORDER BY id ASC", (payload.batch_id,))
+            b_items = [dict(r) for r in cursor.fetchall()]
+            if b_items:
+                recalc = calculate_hpp_batch(b_items, float(b_row["total_ongkir"] or 0.0))
+                for r_it in recalc:
+                    cursor.execute(
+                        "UPDATE koleksi SET ongkir = ?, hpp = ?, hpp_per_pcs = ? WHERE id = ?",
+                        (r_it["ongkir"], r_it["hpp"], r_it["hpp_per_pcs"], r_it["id"])
+                    )
+                conn.commit()
+
+    cursor.execute("SELECT * FROM lot_pembelian WHERE id = ?", (lot_id,))
+    lot_dict = dict(cursor.fetchone())
+    return {
+        "lot": lot_dict,
+        "items": created_items,
+        "message": f"Paket Lot {kode_lot} berisi {len(created_items)} item berhasil disimpan!"
+    }
+
+
+@router.get("/lot/{lot_id}")
+def get_lot_trace_detail(
+    lot_id: int,
+    conn: sqlite3.Connection = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Mendapatkan detail Traceability Paket Lot beserta seluruh item anggota dan analisis ROI / Balik Modal Lot."""
+    ensure_lot_schema(conn)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT l.*,
+               b.kode_batch as batch_kode, b.nama_batch as batch_nama,
+               s.nama as supplier_nama, s.no_hp as supplier_no_hp
+        FROM lot_pembelian l
+        LEFT JOIN batch_pembelian b ON l.batch_id = b.id
+        LEFT JOIN supplier s ON l.supplier_id = s.id
+        WHERE l.id = ?
+        """,
+        (lot_id,)
+    )
+    lot_row = cursor.fetchone()
+    if not lot_row:
+        raise HTTPException(status_code=404, detail="Data Paket Lot tidak ditemukan")
+    lot_dict = dict(lot_row)
+
+    cursor.execute(
+        """
+        SELECT k.*, (k.qty - k.qty_terjual) as qty_tersisa,
+               g.nama_group as group_nama,
+               COALESCE((SELECT SUM(p.qty_jual * p.harga_jual_pcs) FROM penjualan p WHERE p.koleksi_id = k.id), 0) as omzet_terjual,
+               COALESCE((SELECT SUM(p.qty_jual * (p.harga_jual_pcs - p.hpp_pcs)) FROM penjualan p WHERE p.koleksi_id = k.id), 0) as profit_terjual
+        FROM koleksi k
+        LEFT JOIN group_item g ON k.group_id = g.id
+        WHERE k.lot_id = ?
+        ORDER BY k.id ASC
+        """,
+        (lot_id,)
+    )
+    items = [dict(r) for r in cursor.fetchall()]
+
+    total_items = len(items)
+    total_pcs = sum(int(it.get("qty") or 1) for it in items)
+    total_pcs_terjual = sum(int(it.get("qty_terjual") or 0) for it in items)
+    total_pcs_tersisa = sum(int(it.get("qty_tersisa") or 0) for it in items)
+    total_harga_alokasi = sum(float(it.get("harga") or 0) for it in items)
+    total_ongkir_alokasi = sum(float(it.get("ongkir") or 0) for it in items)
+    harga_lot_total = float(lot_dict.get("harga_lot_total") or total_harga_alokasi)
+    total_hpp_lot = total_harga_alokasi + total_ongkir_alokasi
+    total_omzet_terjual = sum(float(it.get("omzet_terjual") or 0) for it in items)
+    total_estimasi_sisa = sum(float(it.get("harga_jual") or 0) * int(it.get("qty_tersisa") or 0) for it in items)
+    selisih_balik_modal = total_omzet_terjual - total_hpp_lot
+    pct_balik_modal = round((total_omzet_terjual / total_hpp_lot) * 100, 1) if total_hpp_lot > 0 else 100.0
+
+    return {
+        "lot": lot_dict,
+        "items": items,
+        "summary": {
+            "total_items": total_items,
+            "total_pcs": total_pcs,
+            "total_pcs_terjual": total_pcs_terjual,
+            "total_pcs_tersisa": total_pcs_tersisa,
+            "harga_lot_total": harga_lot_total,
+            "total_harga_alokasi": total_harga_alokasi,
+            "total_ongkir_alokasi": total_ongkir_alokasi,
+            "total_hpp_lot": total_hpp_lot,
+            "total_omzet_terjual": total_omzet_terjual,
+            "total_estimasi_sisa": total_estimasi_sisa,
+            "selisih_balik_modal": selisih_balik_modal,
+            "pct_balik_modal": pct_balik_modal,
+            "is_balik_modal": selisih_balik_modal >= 0
+        }
+    }
+
+
+@router.put("/lot/{lot_id}")
+def update_lot_pembelian(
+    lot_id: int,
+    payload: LotUpdateRequest,
+    conn: sqlite3.Connection = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Memperbarui informasi Paket Lot dan alokasi harga beli per item di dalam Lot."""
+    ensure_lot_schema(conn)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM lot_pembelian WHERE id = ?", (lot_id,))
+    lot_row = cursor.fetchone()
+    if not lot_row:
+        raise HTTPException(status_code=404, detail="Paket Lot tidak ditemukan")
+
+    nama_lot = payload.nama_lot.strip() if payload.nama_lot else lot_row["nama_lot"]
+    harga_lot_total = payload.harga_lot_total if payload.harga_lot_total is not None else lot_row["harga_lot_total"]
+    ongkir_lot = payload.ongkir_lot if payload.ongkir_lot is not None else lot_row["ongkir_lot"]
+    metode_alokasi = payload.metode_alokasi or lot_row["metode_alokasi"]
+    link_pembelian = payload.link_pembelian if payload.link_pembelian is not None else lot_row["link_pembelian"]
+    tanggal_beli = payload.tanggal_beli or lot_row["tanggal_beli"]
+    catatan = payload.catatan if payload.catatan is not None else lot_row["catatan"]
+
+    cursor.execute(
+        """
+        UPDATE lot_pembelian
+        SET nama_lot = ?, harga_lot_total = ?, ongkir_lot = ?, metode_alokasi = ?,
+            link_pembelian = ?, tanggal_beli = ?, catatan = ?, updated_at = datetime('now','localtime')
+        WHERE id = ?
+        """,
+        (nama_lot, harga_lot_total, ongkir_lot, metode_alokasi, link_pembelian, tanggal_beli, catatan, lot_id)
+    )
+
+    cursor.execute("SELECT id, qty, ongkir FROM koleksi WHERE lot_id = ? ORDER BY id ASC", (lot_id,))
+    lot_items = [dict(r) for r in cursor.fetchall()]
+    total_pcs = sum(max(1, int(it["qty"] or 1)) for it in lot_items)
+
+    alloc_map = {}
+    if payload.item_allocations:
+        for ia in payload.item_allocations:
+            alloc_map[ia.koleksi_id] = max(0.0, float(ia.harga))
+
+    running_ongkir = 0.0
+    for idx, it in enumerate(lot_items):
+        kid = it["id"]
+        qty = max(1, int(it["qty"] or 1))
+        new_harga = alloc_map.get(kid)
+        if new_harga is None:
+            new_harga = round((float(harga_lot_total) * qty) / max(1, total_pcs), 2)
+
+        if not lot_row["batch_id"]:
+            if idx == len(lot_items) - 1:
+                new_ongkir = max(0.0, round(float(ongkir_lot) - running_ongkir, 2))
+            else:
+                new_ongkir = round((float(ongkir_lot) * qty) / max(1, total_pcs), 2)
+                running_ongkir += new_ongkir
+        else:
+            new_ongkir = float(it["ongkir"] or 0.0)
+
+        hpp_calc = calculate_hpp_single(new_harga, new_ongkir, qty)
+        cursor.execute(
+            "UPDATE koleksi SET harga = ?, ongkir = ?, hpp = ?, hpp_per_pcs = ?, link_pembelian = COALESCE(?, link_pembelian), updated_at = datetime('now','localtime') WHERE id = ?",
+            (new_harga, new_ongkir, hpp_calc["hpp"], hpp_calc["hpp_per_pcs"], link_pembelian, kid)
+        )
+
+    conn.commit()
+
+    if lot_row["batch_id"]:
+        from utils.calculations import calculate_hpp_batch
+        cursor.execute("SELECT total_ongkir FROM batch_pembelian WHERE id = ?", (lot_row["batch_id"],))
+        b_row = cursor.fetchone()
+        if b_row:
+            cursor.execute("SELECT id, harga, qty FROM koleksi WHERE batch_id = ? ORDER BY id ASC", (lot_row["batch_id"],))
+            b_items = [dict(r) for r in cursor.fetchall()]
+            if b_items:
+                recalc = calculate_hpp_batch(b_items, float(b_row["total_ongkir"] or 0.0))
+                for r_it in recalc:
+                    cursor.execute(
+                        "UPDATE koleksi SET ongkir = ?, hpp = ?, hpp_per_pcs = ? WHERE id = ?",
+                        (r_it["ongkir"], r_it["hpp"], r_it["hpp_per_pcs"], r_it["id"])
+                    )
+                conn.commit()
+
+    return get_lot_trace_detail(lot_id, conn, current_user)
+
 
 @router.get("/{koleksi_id}")
 def get_koleksi_detail(
@@ -257,12 +723,17 @@ def get_koleksi_detail(
         """
         SELECT k.*, (k.qty - k.qty_terjual) as qty_tersisa,
                s.nama as supplier_nama, s.no_hp as supplier_no_hp,
-               b.kode_batch as batch_kode, b.nama_batch as batch_nama,
-               g.nama_group as group_nama
+               b.kode_batch as batch_kode, b.nama_batch as batch_nama, b.link_pembelian as batch_link_pembelian,
+               g.nama_group as group_nama,
+               l.kode_lot as lot_kode,
+               l.nama_lot as lot_nama,
+               l.harga_lot_total as lot_harga_total,
+               (SELECT COUNT(*) FROM koleksi k2 WHERE k2.lot_id = k.lot_id) as lot_item_count
         FROM koleksi k
         LEFT JOIN supplier s ON k.supplier_id = s.id
         LEFT JOIN batch_pembelian b ON k.batch_id = b.id
         LEFT JOIN group_item g ON k.group_id = g.id
+        LEFT JOIN lot_pembelian l ON k.lot_id = l.id
         WHERE k.id = ?
         """,
         (koleksi_id,)
@@ -350,7 +821,7 @@ def update_koleksi(
         ("batch_id", payload.batch_id),
         ("group_id", (payload.group_id if payload.group_id > 0 else None) if payload.group_id is not None else None),
         ("perolehan", payload.perolehan),
-        ("link_pembelian", payload.link_pembelian),
+        ("link_pembelian", (payload.link_pembelian.strip() or None) if payload.link_pembelian is not None else None),
         ("tanggal_beli", payload.tanggal_beli),
         ("status", payload.status),
         ("harga_jual", payload.harga_jual),
@@ -364,7 +835,7 @@ def update_koleksi(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group item tidak ditemukan")
 
     for col, val in field_mappings:
-        if val is not None or (col == "group_id" and payload.group_id is not None):
+        if val is not None or (col == "group_id" and payload.group_id is not None) or (col == "link_pembelian" and payload.link_pembelian is not None):
             updates.append(f"{col} = ?")
             params.append(val)
 
@@ -379,11 +850,16 @@ def update_koleksi(
         SELECT k.*, (k.qty - k.qty_terjual) as qty_tersisa,
                s.nama as supplier_nama,
                b.kode_batch as batch_kode,
-               g.nama_group as group_nama
+               g.nama_group as group_nama,
+               l.kode_lot as lot_kode,
+               l.nama_lot as lot_nama,
+               l.harga_lot_total as lot_harga_total,
+               (SELECT COUNT(*) FROM koleksi k2 WHERE k2.lot_id = k.lot_id) as lot_item_count
         FROM koleksi k
         LEFT JOIN supplier s ON k.supplier_id = s.id
         LEFT JOIN batch_pembelian b ON k.batch_id = b.id
         LEFT JOIN group_item g ON k.group_id = g.id
+        LEFT JOIN lot_pembelian l ON k.lot_id = l.id
         WHERE k.id = ?
         """,
         (koleksi_id,)
@@ -662,6 +1138,7 @@ async def upload_gallery_foto(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item koleksi tidak ditemukan")
 
     STATIC_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
     ext = Path(foto.filename or "").suffix.lower()
     if ext == ".jfif":
         ext = ".jpg"

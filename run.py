@@ -96,6 +96,18 @@ def check_python_version():
 
 def get_venv_paths():
     system, _, _ = get_platform_info()
+    # 1. Check embedded portable Python runtime first (Single Offline Installer mode)
+    embedded_dir = ROOT_DIR / "runtime" / "python"
+    if system == "Windows" and (embedded_dir / "python.exe").exists():
+        python_bin = embedded_dir / "python.exe"
+        pip_bin = embedded_dir / "Scripts" / "pip.exe"
+        return embedded_dir, python_bin, pip_bin
+    elif system != "Windows" and (embedded_dir / "bin" / "python3").exists():
+        python_bin = embedded_dir / "bin" / "python3"
+        pip_bin = embedded_dir / "bin" / "pip3"
+        return embedded_dir, python_bin, pip_bin
+
+    # 2. Standard .venv virtual environment
     venv_dir = ROOT_DIR / ".venv"
     if system == "Windows":
         python_bin = venv_dir / "Scripts" / "python.exe"
@@ -117,9 +129,11 @@ def ensure_virtualenv():
 
 
 def is_running_in_venv():
-    # Detect if current process is inside the project's .venv
-    venv_dir, _, _ = get_venv_paths()
+    # Detect if current process is inside the project's .venv or embedded runtime
+    venv_dir, python_bin, _ = get_venv_paths()
     try:
+        if Path(sys.executable).resolve() == python_bin.resolve():
+            return True
         return Path(sys.prefix).resolve() == venv_dir.resolve()
     except Exception:
         return False

@@ -88,11 +88,44 @@ def migration_004_batch_checklist_and_final_ok(conn: sqlite3.Connection):
         cursor.execute("ALTER TABLE koleksi ADD COLUMN is_checked INTEGER DEFAULT 0")
     conn.commit()
 
+
+def migration_005_add_lot_pembelian(conn: sqlite3.Connection):
+    """Menambahkan tabel lot_pembelian dan kolom lot_id pada tabel koleksi."""
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS lot_pembelian (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kode_lot TEXT UNIQUE NOT NULL,
+            nama_lot TEXT NOT NULL,
+            harga_lot_total REAL DEFAULT 0,
+            ongkir_lot REAL DEFAULT 0,
+            metode_alokasi TEXT DEFAULT 'proporsional_qty',
+            batch_id INTEGER REFERENCES batch_pembelian(id) ON DELETE SET NULL,
+            supplier_id INTEGER REFERENCES supplier(id),
+            perolehan TEXT,
+            link_pembelian TEXT,
+            tanggal_beli TEXT,
+            status TEXT DEFAULT 'pesan',
+            catatan TEXT,
+            created_by INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT (datetime('now','localtime')),
+            updated_at TEXT DEFAULT (datetime('now','localtime'))
+        )
+        """
+    )
+    cursor.execute("PRAGMA table_info(koleksi)")
+    cols = [row["name"] for row in cursor.fetchall()]
+    if "lot_id" not in cols:
+        cursor.execute("ALTER TABLE koleksi ADD COLUMN lot_id INTEGER REFERENCES lot_pembelian(id) ON DELETE SET NULL")
+    conn.commit()
+
 MIGRATIONS: List[Tuple[str, str, Callable[[sqlite3.Connection], None]]] = [
     ("001_baseline", "Baseline schema tracking", migration_001_baseline),
     ("002_certification_and_photos", "Add grading certification fields and photo gallery table", migration_002_add_certification_and_photos),
     ("003_add_group_item", "Add group_item master table and group_id relation in koleksi", migration_003_add_group_item),
     ("004_batch_checklist_and_final_ok", "Add is_final_ok in batch_pembelian and is_checked in koleksi", migration_004_batch_checklist_and_final_ok),
+    ("005_add_lot_pembelian", "Add lot_pembelian table and lot_id column in koleksi", migration_005_add_lot_pembelian),
 ]
 
 def run_migrations(conn: sqlite3.Connection):
